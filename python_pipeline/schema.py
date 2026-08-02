@@ -49,6 +49,11 @@ class Value(Strict):
     unit: str | None = None
     # None until the evaluator has run. Renderers must refuse to display a None.
     resolved: str | None = None
+    # The narrated word this value should appear on (R5). Named explicitly by the
+    # annotator rather than guessed by the template: fuzzy-matching `resolved`
+    # against the transcript mis-fires whenever the spoken form differs from the
+    # displayed form ("sixteen point eight million" vs "16,777,216").
+    cue_word: str | None = None
 
 
 class WordTrigger(Strict):
@@ -103,9 +108,14 @@ class Transition(Strict):
 class Provenance(Strict):
     script_sha256: str = ""
     llm_model: str = ""
+    # Which annotator actually produced the scenes. Distinct from llm_model
+    # because a failed API call falls back to the heuristic path, and the spec
+    # must say so.
+    annotator: str = ""
     prompt_sha256: str = ""
     tts_provider: str = ""
     tts_voice: str = ""
+    tts_model: str = ""
     aligner: str = ""
     fps: int = 30
     width: int = 1920
@@ -127,6 +137,72 @@ class SceneSpec(Strict):
 
     def scene_by_id(self, scene_id: str) -> Scene | None:
         return next((s for s in self.scenes if s.scene_id == scene_id), None)
+
+
+# --------------------------------------------------------------------------
+# The annotation contract — what an annotator (LLM or heuristic) returns.
+#
+# Deliberately NOT the Scene model. An annotator returns a flat, uniform
+# description of one segment; `annotate.build_props` turns that into the
+# template-specific prop shape. Two reasons:
+#
+#   * A model asked to emit seven different nested prop shapes gets them subtly
+#     wrong. One shape it always fills correctly.
+#   * Prop layout is a renderer concern. Keeping it in Python means adding a
+#     template does not change the LLM's output schema, so cached annotations
+#     stay valid.
+# --------------------------------------------------------------------------
+
+
+class ValueSpec(Strict):
+    """An annotator's proposal for one on-screen value.
+
+    `expr` is an arithmetic expression for evaluator.py to compute. `text` is
+    literal non-numeric text. Exactly one should be set; supplying `text` that
+    looks like a number is rejected downstream (R4).
+    """
+
+    label: str = ""
+    expr: str | None = None
+    text: str | None = None
+    format: ValueFormat = "raw"
+    unit: str | None = None
+    cue_word: str | None = None
+
+    def to_value(self) -> Value:
+        return Value(
+            label=self.label,
+            expr=self.expr,
+            format=self.format,
+            unit=self.unit,
+            resolved=None if self.expr else self.text,
+            cue_word=self.cue_word,
+        )
+
+
+class StepSpec(Strict):
+    label: str
+    detail: str | None = None
+
+
+class Annotation(Strict):
+    """One annotated segment. Order matches the segments handed to the annotator."""
+
+    segment_index: int
+    template_name: TemplateName
+    title: str = ""
+    subtitle: str | None = None
+    caption: str | None = None
+    headline: ValueSpec | None = None
+    items: list[ValueSpec] = Field(default_factory=list)
+    steps: list[StepSpec] = Field(default_factory=list)
+    # Free-text rationale. Not rendered; it makes a bad annotation diagnosable in
+    # the cached JSON without re-running the model.
+    reasoning: str = ""
+
+
+class AnnotationSet(Strict):
+    annotations: list[Annotation]
 
 
 # --------------------------------------------------------------------------
@@ -169,7 +245,7 @@ class SegmentationConfig(BaseModel):
 
 
 class ProvidersConfig(BaseModel):
-    llm: str = "claude-opus-5"
+    llm: str = "gemini-2.5-flash"
     tts: str = "edge-tts"
     aligner: str = "native"
     assets: str = "null"
@@ -177,10 +253,42 @@ class ProvidersConfig(BaseModel):
 
 
 class TTSConfig(BaseModel):
-    voice: str = "en-US-AriaNeural"
+    """TTS settings.
+
+    `voices` holds one entry per provider because a voice identifier is
+    provider-specific (a Cartesia voice is a UUID; an edge-tts voice is a name
+    like "en-US-AriaNeural"). Without this, switching providers would mean
+    hand-editing the voice string too — which is the "rewrite" R7 forbids.
+
+    `rate` stays in the provider-neutral "+10%" form; each provider translates.
+    """
+
+    voices: dict[str, str] = Field(
+        default_factory=lambda: {
+            # Cartesia: "Sophie" — a stock English conversational voice.
+            "cartesia": "bf0a246a-8642-498a-9950-80c35e9276b5",
+            "edge-tts": "en-US-AriaNeural",
+            "piper": "en_US-lessac-medium",
+        }
+    )
+    # Explicit override; wins over the per-provider table when set.
+    voice: str | None = None
     rate: str = "+0%"
+    model: str = "sonic-3.5"   # Cartesia model_id; ignored by other providers
+    language: str = "en"
     sample_rate: int = 24000
     channels: int = 1
+
+    def voice_for(self, provider: str) -> str:
+        if self.voice:
+            return self.voice
+        try:
+            return self.voices[provider]
+        except KeyError:
+            raise ValueError(
+                f"No voice configured for TTS provider {provider!r}. "
+                f"Add tts.voices.{provider} to config.yaml, or set tts.voice."
+            ) from None
 
 
 class AudioConfig(BaseModel):

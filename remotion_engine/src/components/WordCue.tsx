@@ -17,14 +17,44 @@ import type {WordTrigger} from '../types';
 
 export const msToFrame = (ms: number, fps: number): number => Math.round((ms / 1000) * fps);
 
-/** Find the trigger for a word (case-insensitive, punctuation-insensitive). */
+export const normalizeWord = (s: string): string =>
+	s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+
+/**
+ * Find the trigger for a word (case-insensitive, punctuation-insensitive).
+ *
+ * Three passes, narrowing from exact to loose. The looser passes exist because
+ * the annotator names a word from the narration but the TTS provider decides how
+ * to tokenise it, and the two disagree in two specific ways:
+ *
+ *   1. Compounds. The cue is "8"; the provider emits "8-bit" as one token, which
+ *      normalises to "8bit". A prefix match recovers it.
+ *   2. Blobs. Providers occasionally emit a run of words as a single event
+ *      ("256 equals 16,777,216"). Matching against the contained sub-tokens
+ *      recovers the cue, at the cost of firing at the blob's start.
+ *
+ * A miss is not silent-safe — `useCueProgress` treats "no trigger" as "show
+ * immediately", so an unmatched cue means the element ignores the audio entirely.
+ * That is why the fallbacks are worth having.
+ */
 export const findTrigger = (
 	triggers: WordTrigger[],
 	word: string,
 ): WordTrigger | undefined => {
-	const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
-	const target = norm(word);
-	return triggers.find((t) => norm(t.word) === target);
+	const target = normalizeWord(word);
+	if (!target) return undefined;
+
+	const exact = triggers.find((t) => normalizeWord(t.word) === target);
+	if (exact) return exact;
+
+	// Pass 2: the cue is a prefix of a compound token ("8" in "8-bit").
+	const prefix = triggers.find((t) => normalizeWord(t.word).startsWith(target));
+	if (prefix) return prefix;
+
+	// Pass 3: the cue is one word inside a multi-word event.
+	return triggers.find((t) =>
+		t.word.split(/\s+/).some((part) => normalizeWord(part) === target),
+	);
 };
 
 export interface CueOptions {

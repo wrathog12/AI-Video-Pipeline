@@ -9,18 +9,31 @@
 
 import React from 'react';
 
+import {BigNumber} from './templates/BigNumber';
 import {ExpressionCard} from './templates/ExpressionCard';
 import {Fallback} from './templates/Fallback';
+import {KeyValuePanel} from './templates/KeyValuePanel';
+import {ProcessSteps} from './templates/ProcessSteps';
+import {TitleCard} from './templates/TitleCard';
 import {DEFAULT_THEME} from './theme';
 import type {SceneProps, TemplateName} from './types';
 
 /**
- * Phase 0 ships ExpressionCard + Fallback. The remaining templates
- * (TitleCard, KeyValuePanel, BigNumber, ComparisonGrid, ProcessSteps) land in
- * Phase 3 and register here.
+ * Keep this in step with IMPLEMENTED_TEMPLATES in python_pipeline/annotate.py.
+ * The annotator is told which templates exist, and an out-of-set choice is
+ * downgraded to Fallback there — so a mismatch shows up as a Python-side warning
+ * rather than as a silently generic scene.
+ *
+ * ComparisonGrid is intentionally absent: the flat annotation contract has no
+ * notion of columns, so a grid would have to invent structure the annotator
+ * never described.
  */
 const REGISTRY: Partial<Record<TemplateName, React.FC<SceneProps>>> = {
+	TitleCard,
+	KeyValuePanel,
 	ExpressionCard,
+	BigNumber,
+	ProcessSteps,
 	Fallback,
 };
 

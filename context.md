@@ -62,73 +62,92 @@ script fail visibly at review.
 
 ## 3. Project Directory Structure
 
+Everything lives at the repository root — there is no wrapper directory, so a clone *is* the
+project. Files marked ✓ exist; unmarked ones are planned.
+
 ```
-ai-video-engine/
+.
 ├── run                          # bash entry point (R1)
-├── run.cmd / run.ps1            # Windows shims — same CLI surface
-├── config.yaml                  # master configuration (R7)
-├── Dockerfile                   # pins python, node, chromium, ffmpeg, fonts
-├── docker-compose.yml
-├── README.md                    # clone → video on a clean machine
-├── context.md                   # this document
+├── run.cmd / run.ps1          ✓ # Windows shims — same CLI surface
+├── config.yaml                ✓ # master configuration (R7)
+├── requirements.txt           ✓ # pinned; optional extras commented out
+├── .env.example               ✓ # key names only — .env itself is gitignored
+├── Dockerfile                 ✓ # pins python, node, chromium, ffmpeg, fonts
+├── docker-compose.yml         ✓
+├── README.md                  ✓ # clone → video on a clean machine
+├── context.md                 ✓ # this document
+├── ENGINEERING_LOG.md         ✓ # append-only; dead ends as they happen
 │
 ├── python_pipeline/
-│   ├── __init__.py
-│   ├── main.py                  # orchestrator + CLI
-│   ├── segmenter.py             # DETERMINISTIC scene splitting (no LLM)
-│   ├── llm_annotator.py         # LLM: template + props for fixed segments
-│   ├── schema.py                # Pydantic models, schema_version
-│   ├── evaluator.py             # symbolic expression evaluation + formatting
-│   ├── heuristic_annotator.py   # rule-based fallback if the LLM is unreachable
+│   ├── main.py                ✓ # orchestrator + CLI (8 stages)
+│   ├── segmenter.py           ✓ # DETERMINISTIC scene splitting (no LLM)
+│   ├── schema.py              ✓ # Pydantic IR + the flat annotation contract
+│   ├── annotate.py            ✓ # Annotation → per-template props; reconciliation
+│   ├── llm_annotator.py       ✓ # Gemini (default) + Claude, dispatched by prefix
+│   ├── heuristic_annotator.py ✓ # rule-based fallback if the LLM is unreachable
+│   ├── evaluator.py           ✓ # AST-whitelist evaluation + formatting (R4)
+│   ├── env.py                 ✓ # .env loading; returns key NAMES, never values
+│   ├── cache.py               ✓ # content-addressed cache (spec/audio/align/render)
+│   ├── audio_track.py         ✓ # frame-aligned continuous PCM assembly
+│   ├── renderer.py            ✓ # Remotion invocation (Renderer interface)
+│   ├── mux.py                 ✓ # single final ffmpeg mux
+│   ├── verify_determinism.py  ✓ # frame + sample hash comparison of two runs (R3)
+│   ├── cue_check.py           ✓ # every cue_word resolves to a trigger (R5)
+│   ├── qa_ocr.py                # R4 legibility gate — stub, off by default
 │   ├── tts/
-│   │   ├── base.py              # TTSProvider interface
-│   │   ├── edge.py              # edge-tts (+ native WordBoundary timings)
+│   │   ├── base.py            ✓ # TTSProvider interface
+│   │   ├── edge.py            ✓ # edge-tts (+ native WordBoundary timings)
+│   │   ├── cartesia.py        ✓ # Sonic over SSE, add_timestamps (untested: no key)
 │   │   ├── piper.py             # local/offline provider
-│   │   └── elevenlabs.py
+│   │   └── elevenlabs.py        # char-level timestamps
 │   ├── align/
-│   │   ├── base.py              # Aligner interface
-│   │   ├── native.py            # timings straight from the TTS provider
+│   │   ├── base.py            ✓ # Aligner interface
+│   │   ├── native.py          ✓ # timings straight from the TTS provider
 │   │   └── whisperx.py          # forced-alignment fallback
-│   ├── assets/
-│   │   ├── base.py              # AssetProvider interface
-│   │   ├── null.py              # returns nothing; templates degrade gracefully
-│   │   └── icon_pack.py         # local SVG lookup by keyword
-│   ├── cache.py                 # two-tier content-addressed cache
-│   ├── audio_track.py           # frame-aligned continuous PCM assembly
-│   ├── renderer.py              # Remotion invocation (Renderer interface)
-│   ├── mux.py                   # single final ffmpeg mux
-│   ├── qa_ocr.py                # R4 verification gate
-│   └── verify_determinism.py    # frame-hash comparison of two runs
+│   └── assets/
+│       ├── base.py            ✓ # AssetProvider interface
+│       ├── null.py            ✓ # returns nothing; templates degrade gracefully
+│       └── icon_pack.py         # local SVG lookup by keyword
 │
 ├── remotion_engine/
-│   ├── package.json
-│   ├── remotion.config.ts
-│   ├── fonts/                   # bundled locally — never fetched at render time
+│   ├── package.json           ✓
+│   ├── remotion.config.ts     ✓
+│   ├── .eslintrc.cjs          ✓ # the wall-clock ban — verified to actually fire
+│   ├── fonts/                 ✓ # bundled locally — never fetched at render time
 │   └── src/
-│       ├── Root.tsx
-│       ├── SceneDispatcher.tsx  # maps template_name → component, Fallback on miss
-│       ├── theme.ts             # reads theme + orientation from injected props
+│       ├── Root.tsx           ✓
+│       ├── SceneDispatcher.tsx ✓ # template_name → component, Fallback on miss
+│       ├── theme.ts           ✓ # theme + orientation from injected props
+│       ├── types.ts           ✓ # mirrors schema.py, incl. cue_word
 │       ├── templates/
-│       │   ├── TitleCard.tsx
-│       │   ├── KeyValuePanel.tsx
-│       │   ├── ExpressionCard.tsx
-│       │   ├── BigNumber.tsx
-│       │   ├── ComparisonGrid.tsx
-│       │   ├── ProcessSteps.tsx
-│       │   └── Fallback.tsx      # narration + safe generic layout
+│       │   ├── TitleCard.tsx      ✓
+│       │   ├── KeyValuePanel.tsx  ✓
+│       │   ├── ExpressionCard.tsx ✓
+│       │   ├── BigNumber.tsx      ✓ # fitFactor shrinks the hero so digits can't clip
+│       │   ├── ProcessSteps.tsx   ✓
+│       │   ├── Fallback.tsx       ✓ # narration + safe generic layout
+│       │   └── ComparisonGrid.tsx   # NOT in IMPLEMENTED_TEMPLATES — see below
 │       └── components/
-│           ├── WordCue.tsx       # ms → frame conversion happens HERE
-│           ├── SwatchStrip.tsx   # generic colour/value strip (not RGB-specific)
-│           └── CountUp.tsx
+│           ├── WordCue.tsx     ✓ # ms → frame conversion happens HERE
+│           ├── ValueBlock.tsx  ✓ # shared value rendering; cue anchoring lives here
+│           ├── SwatchStrip.tsx ✓ # generic colour/value strip (not RGB-specific)
+│           └── CountUp.tsx     ✓
 │
-├── scripts/script_a.txt
+├── scripts/
+│   ├── script_a.txt           ✓ # the assignment's script
+│   └── script_b.txt           ✓ # unseen-topic script for the R2 rehearsal
 ├── output/
 └── .cache/
-    ├── spec/                    # LLM annotation results
+    ├── spec/                    # annotation results
     ├── audio/                   # PCM WAV per (text, provider, voice, rate)
     ├── align/                   # aligner output per audio hash
     └── scenes/                  # video-only scene MP4s
 ```
+
+`ComparisonGrid.tsx` exists but is deliberately absent from `IMPLEMENTED_TEMPLATES` in
+`annotate.py`: the flat annotation contract (§5) has no notion of columns and rows, so the annotator
+cannot fill it honestly. `reconcile()` downgrades any request for it to a template that can be
+filled, and logs the downgrade. A grid stuffed with mislabelled cells is worse than a `Fallback`.
 
 ---
 
@@ -176,7 +195,7 @@ segmentation:
   words_per_minute: 165         # duration estimate used to group sentences
 
 providers:
-  llm: "claude-opus-5"          # annotation only
+  llm: "gemini-2.5-flash"       # annotation only; dispatched by vendor prefix
   tts: "edge-tts"               # edge-tts | piper | elevenlabs
   aligner: "native"             # native | whisperx
   assets: "null"                # null | icon_pack
@@ -210,7 +229,8 @@ and re-running `--spec` changes the video (R6).
   "project_title": "How Computers See Color",
   "provenance": {
     "script_sha256": "8c1f…",
-    "llm_model": "claude-opus-5",
+    "annotator": "gemini",
+    "llm_model": "gemini-2.5-flash",
     "prompt_sha256": "b0a3…",
     "tts_provider": "edge-tts",
     "tts_voice": "en-US-AriaNeural",
@@ -237,10 +257,19 @@ and re-running `--spec` changes the video (R6).
           "label": "Pure red",
           "expr": "(255, 0, 0)",
           "format": "tuple",
+          "unit": null,
+          "cue_word": "255",
           "resolved": "(255, 0, 0)"
         },
         "items": [
-          { "label": "All channels off", "expr": "(0, 0, 0)", "format": "tuple", "resolved": "(0, 0, 0)" }
+          {
+            "label": "All channels off",
+            "expr": "(0, 0, 0)",
+            "format": "tuple",
+            "unit": null,
+            "cue_word": "black",
+            "resolved": "(0, 0, 0)"
+          }
         ],
         "swatches": [
           { "label": "resolved", "channels": [255, 0, 0] },
@@ -270,6 +299,8 @@ and re-running `--spec` changes the video (R6).
           "label": "256 × 256 × 256",
           "expr": "256**3",
           "format": "thousands",
+          "unit": null,
+          "cue_word": "16,777,216",
           "resolved": "16,777,216"
         },
         "items": []
@@ -286,6 +317,13 @@ and re-running `--spec` changes the video (R6).
 
 - `expr` is what the LLM produced. `resolved` is what Python computed. A reviewer can see both, and
   can edit `expr` and re-run the render stage to watch the number change — a clean R4 + R6 demo.
+- `cue_word` names **which narrated word this value is anchored to**, and the annotator supplies it.
+  The alternative — having the template fuzzy-match `resolved` against the word triggers — fails
+  exactly where it matters: narration says "sixteen point eight million" while the display says
+  `16.8`, so the string that is on screen is not the string that was spoken. Naming the spoken token
+  explicitly is the only version that survives. A cue that matches nothing is *not* fail-safe:
+  `useCueProgress` treats a missing trigger as "show immediately", so the element silently ignores
+  the audio. `cue_check.py` exists to make that countable rather than invisible.
 - `word_triggers` are **milliseconds relative to the scene's own audio**, and are invalidated when
   `derived_from.narration_sha256` no longer matches `narration_text`. Editing narration in the spec
   therefore re-aligns only that one scene.
@@ -332,12 +370,32 @@ the narration.
 
 ### Stage 2 — LLM annotation (`llm_annotator.py`)
 
-Input: the fixed segment list. Output: `template_name` + `props` per segment, nothing else.
+Input: the fixed segment list. Output one `Annotation` per segment, nothing else.
 
-- Use the Anthropic SDK with **structured outputs**: `client.messages.parse(...)` with
-  `output_config={"format": ...}` derived from the Pydantic model. Model: `claude-opus-5`.
-- **Do not send `temperature`.** It is not a "set it to 0 for determinism" knob here — it is
-  rejected with a 400 on `claude-opus-5`. Determinism comes from the cache (§7).
+**The contract is flat, not per-template.** The model returns a single uniform shape
+(`template_name`, `title`, `subtitle?`, `caption?`, `headline?`, `items[]`, `steps[]`, `reasoning`)
+and `annotate.build_props` maps it to each template's prop layout in Python. Asking the model to emit
+seven different nested shapes gives seven ways to be subtly wrong, makes prop layout — a renderer
+concern — part of the model's job, and means adding a template invalidates every cached annotation.
+
+- Default: **Gemini** (`gemini-2.5-flash`) via `google-genai`, with a hand-written
+  `RESPONSE_SCHEMA`. Gemini's `responseSchema` is a restricted OpenAPI subset: use `nullable: true`
+  rather than `anyOf` with null, and `propertyOrdering` is the only way to control field order —
+  which matters, because `reasoning` must be ordered *before* `template_name` so the model commits to
+  a justification before a choice.
+- Dispatch is by **vendor prefix** (`llm_annotator.get_annotator`), so any `gemini-*` or `claude-*`
+  model id works with no code change, and `heuristic` runs the offline annotator with no key at all.
+  Two live vendors is what makes the R7 "swappable" claim demonstrable rather than asserted.
+- **`temperature` and `seed` are vendor-specific.** Gemini accepts both, so they are sent — a real
+  cold-cache determinism lever. `claude-opus-5` rejects `temperature` with a 400, so the Claude path
+  omits it. Either way the cache (§7) remains the actual R3 guarantee; sampling parameters are a
+  nice-to-have on top of it.
+- `reconcile()` repairs what the model gets structurally wrong — duplicate segment indices,
+  out-of-range indices, unannotated segments, unimplemented templates, empty content — and returns
+  every repair as a warning that the run logs. The pipeline does not abort on a bad annotation; it
+  degrades and says so.
+- `narration_text` is copied from the **segment**, never from the annotation. That is the structural
+  half of the no-rewrite invariant: even a model that paraphrases cannot change what the TTS speaks.
 - Prompt rules, verbatim in the system prompt:
   - You are given segments. Do not merge, split, reword, or re-order them.
   - Never compute a numeric result. Emit `{"expr": "...", "format": "..."}` and let the caller
@@ -359,7 +417,15 @@ This stage, not the LLM, is what satisfies "computed, not authored".
   `Expression, BinOp, UnaryOp, Constant, Tuple, List, Add, Sub, Mult, Div, FloorDiv, Pow, Mod,
   USub, UAdd`. Reject anything else — no names, no calls, no attributes, no subscripts. (`sympy` is
   an acceptable alternative but is a heavy dependency for what a 40-line whitelist walker does.)
-- Cap magnitude (`abs(base) <= 10**6`, `abs(exponent) <= 64`) so `9**9**9` cannot hang the render.
+- **Annotator output is untrusted input by construction**, so the limits are real bounds and not
+  sanity checks: `MAX_EXPR_CHARS`, `MAX_NODES`, `MAX_RESULT_BITS`, `MAX_FACTORIAL`. Crucially
+  `_check_pow` decides via **bit-length arithmetic**, so `2**10**9` is rejected without ever being
+  computed — a magnitude cap that has to evaluate the expression first is not a cap.
+- **A `Value` with a bare number in `resolved` and no `expr` is rejected.** That refusal *is* the R4
+  gate: it makes "authored rather than computed" a hard failure instead of a convention. Non-numeric
+  strings (`0-255`, `RGB`, `8-bit`) pass, because they are labels, not results.
+- `--explain-values` prints every resolution as a table — expression, format, computed result — which
+  is how R4 gets demonstrated in the review without opening the JSON.
 - Formatters: `int`, `thousands` (`f"{v:,}"`), `float:N`, `tuple`, `range` (`"0–255"` with an en
   dash), `percent`, `raw`.
 - Write the result into `props…resolved` and freeze it. Templates render `resolved` and never
@@ -484,13 +550,15 @@ The v1 doc claimed determinism via "LLM temperature: 0.0". That claim is wrong t
 
 1. Hosted LLM inference is not bit-reproducible even at temperature 0 — request batching, MoE
    routing and floating-point non-associativity all perturb logits.
-2. `temperature` is not an accepted parameter on `claude-opus-5` at all; sending it returns a 400.
+2. `temperature` is not even an accepted parameter on every model. Gemini takes it (and `seed`);
+   `claude-opus-5` returns a 400. So the "just set temperature to 0" answer is not portable across
+   the vendors R7 requires us to support.
 
 R3 explicitly permits caching as the constraint mechanism, so state it plainly:
 
 | Component | Non-determinism source | Constraint |
 |---|---|---|
-| LLM annotation | Inference non-reproducibility | Content-addressed cache on `(script, prompt, model_id, schema_version)`. The second run reads the same spec. |
+| LLM annotation | Inference non-reproducibility | Content-addressed cache on `(normalised script, prompt fingerprint, model_id, schema_version)`. The second run reads the same spec and makes no request. `temperature=0` + `seed` are sent where the vendor accepts them, as a cold-cache best-effort — not as the guarantee. |
 | TTS | Cloud synthesis drift | Cache decoded PCM on `(text, provider, voice, rate)`. Piper gives a fully offline option. |
 | Forced alignment | GPU kernel/threading nondeterminism | CPU-only, `torch.use_deterministic_algorithms(True)`, cached output. |
 | Chromium render | Font fallback, wall-clock animation, GPU raster | Bundled fonts, pinned Chrome Headless Shell, banned wall-clock APIs, software rasterisation. |
@@ -508,13 +576,22 @@ flags:
 ```
 ./run --script scripts/script_b.txt --out output/script_b.mp4
 ./run --spec output/script_a.spec.json --out output/script_a.mp4   # skip the LLM (R6)
-./run --script … --from-stage render                                # resume
+./run --script … --annotator heuristic                              # force the offline path
+./run --script … --explain-values                                   # R4: expr → computed
+./run --script … --dry-run                                          # spec only, no TTS/render
 ./run --script … --config alt.yaml --profile portrait               # R7
 ./run --script … --explain-cache                                    # R8
 ./run --script … --no-cache | --cache-dir .cache2
 ./run --verify-determinism output/a.mp4 output/b.mp4                # R3
 ./run --help
 ```
+
+`--from-stage` was specified in v1 and is **not** implemented. It was redundant: `--spec` already
+resumes from after annotation, and the content-addressed cache makes every other stage skip itself
+when its inputs are unchanged. A flag that manually re-does what the cache does automatically is a
+second, less trustworthy source of truth about what is stale. `--dry-run` took its place, because
+"produce the spec and stop" is the thing actually worth doing by hand (it is a ~3 s LLM-only loop
+instead of a 400 s render).
 
 ```bash
 #!/usr/bin/env bash
@@ -588,26 +665,38 @@ answer ready before it is asked.
 
 ## 11. Build Order
 
-Ship a walking skeleton first. Breadth after depth.
+Ship a walking skeleton first. Breadth after depth. Status is current as of the Phase 1–3 log entry.
 
-**Phase 0 — end-to-end skeleton (day 1).** Hardcoded 2-scene spec → one generic template →
-edge-tts → native word timings → video-only render → PCM track → mux. Verify a real MP4 plays with
-audio in sync. Everything else is an elaboration of a working pipe.
+**Phase 0 — end-to-end skeleton. ✅ COMPLETE.** Hardcoded 2-scene spec → one generic template →
+edge-tts → native word timings → video-only render → PCM track → mux. Result: 825 frames,
+27.500000 s, video duration == audio duration. Two dead ends logged (absent `WordBoundary` events;
+an unstable PCM hash that broke the align cache).
 
-**Phase 1 — determinism and cache.** Two-tier cache, `--explain-cache`, `verify_determinism.py`.
-Run twice, prove frame-identical.
+**Phase 1 — determinism and cache. ✅ COMPLETE.** Four cache tiers (spec/audio/align/render),
+`--explain-cache`, `verify_determinism.py`. 4148 frames identical across two runs; the verifier also
+tested against a known-different pair so a pass means something.
 
-**Phase 2 — the R4 spine.** `segmenter.py` + fidelity assertion, `evaluator.py` + the AST whitelist,
-`llm_annotator.py` with structured outputs. Test the evaluator against Script A's four values *and*
-against invented values from an unrelated topic.
+**Phase 2 — the R4 spine. ✅ COMPLETE.** `segmenter.py` + fidelity gate (9/9 sentence battery),
+`evaluator.py` (18/18 arithmetic, 20/20 hostile expressions rejected, 13/13 formats),
+`llm_annotator.py` with Gemini structured outputs. Two annotators ship: Gemini and the heuristic.
+⚠️ **The Gemini path has never made a live call** — no key on disk yet. Everything up to the request
+is exercised; the request itself is not.
 
-**Phase 3 — breadth for R2/R7.** Remaining templates + `Fallback`, portrait profile, `piper`,
-`whisperx`, `icon_pack`, OCR gate, Docker.
+**Phase 3 — breadth for R2/R7. ◐ PARTIAL.** Done: 6 templates + `Fallback`, portrait profile,
+Cartesia provider, script B on an unrelated topic, `cue_check.py`. Outstanding: `piper`, `whisperx`,
+`icon_pack`, the OCR gate (`qa_ocr.py` is a stub and off by default), and `ComparisonGrid` — which
+needs a richer annotation contract than the flat one (§6 Stage 2) and is deliberately not registered.
 
-**Phase 4 — hardening.** Run on 3–4 self-written scripts on unrelated topics (one with no numbers
-at all, one with dates and percentages, one twice Script A's length). Fix what breaks. Then rehearse
-the live-review sequence: fresh clone → Script B → run twice → edit a spec value → re-render one
-scene.
+**Phase 4 — hardening. ☐ NOT STARTED.** Run on 3–4 self-written scripts on unrelated topics (one
+with no numbers at all, one with dates and percentages, one twice Script A's length). Fix what
+breaks. Then rehearse the live-review sequence: fresh clone → Script B → run twice → edit a spec
+value → re-render one scene.
+
+**The one measurement worth taking first.** Script B currently produces **5 of 7 `Fallback` scenes**
+on the heuristic annotator, because it cannot parse word-form arithmetic ("seventy-two divided by
+seven"). That number is the cleanest available proxy for what the LLM annotator is actually worth:
+re-run script B with Gemini live and the delta is the annotator's entire contribution, measured
+rather than asserted.
 
 **Log dead ends as they happen, in a running file.** The assignment demands at least two with
 expectation / actual / hypothesis / next / resolution, and rewards specificity. Reconstructing them

@@ -35,6 +35,12 @@ export interface Value {
   format: ValueFormat;
   unit: string | null;
   resolved: string | null;
+  /**
+   * The narrated word this value should appear on (R5). Named by the annotator
+   * rather than guessed here, because the spoken form and the displayed form
+   * often differ ("sixteen point eight million" vs "16.8").
+   */
+  cue_word: string | null;
 }
 
 export interface WordTrigger {

@@ -7,11 +7,15 @@ edge-tts==7.2.8           # TTSProvider: synthesis + native WordBoundary timings
 numpy==2.3.3              # PCM assembly in the sample domain
 soundfile==0.13.1         # WAV decode/encode (libsndfile)
 
-# --- Phase 2: LLM annotation ---
-anthropic>=0.75.0         # structured outputs via messages.parse()
-num2words==0.5.14         # numeral expansion for alignment normalisation
+# --- LLM annotation ---
+google-genai==1.74.0      # default annotator: Gemini structured outputs + seed
+requests==2.32.5          # Cartesia TTS streams over SSE; no SDK needed
 
-# --- Phase 3: fallback aligner + QA gate ---
-# Installed on demand; both are heavy and neither is on the default path.
-#   pip install whisperx        (pulls torch, ~2.5GB)
-#   pip install pytesseract     (also needs the tesseract binary on PATH)
+# --- Optional alternates (R7). Not on the default path. ---
+# anthropic>=0.75.0       # providers.llm: claude-*  (ClaudeAnnotator)
+# num2words==0.5.14       # numeral expansion, only needed by the whisperx aligner
+# whisperx                # providers.aligner: whisperx  (pulls torch, ~2.5GB)
+# pytesseract             # qa.ocr_gate: true  (also needs the tesseract binary)
+#
+# The pipeline runs end to end with nothing from this block installed: it falls
+# back to the heuristic annotator, native alignment, and no OCR gate.

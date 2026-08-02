@@ -136,12 +136,19 @@ class Cache:
 
 
 def audio_key(*, normalized_text: str, provider: str, voice: str, rate: str,
-              sample_rate: int) -> str:
+              sample_rate: int, model: str = "-") -> str:
+    """Audio cache key.
+
+    `model` is included because a provider can change voice output without the
+    voice id changing — Cartesia's sonic-3 and sonic-3.5 read the same text
+    differently, and omitting it would serve last model's audio.
+    """
     return sha256_obj(
         {
             "text": normalized_text,
             "provider": provider,
             "voice": voice,
+            "model": model,
             "rate": rate,
             "sample_rate": sample_rate,
         }

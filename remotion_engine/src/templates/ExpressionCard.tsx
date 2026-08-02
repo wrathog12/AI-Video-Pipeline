@@ -15,7 +15,8 @@ import React from 'react';
 import {interpolate, useCurrentFrame, useVideoConfig} from 'remotion';
 
 import {useMetrics, rootStyle} from '../theme';
-import {WordCue, findTrigger, useCueProgress} from '../components/WordCue';
+import {ValueBlock, triggerFor} from '../components/ValueBlock';
+import {useCueProgress} from '../components/WordCue';
 import type {SceneProps, Value} from '../types';
 
 interface ExpressionProps {
@@ -45,11 +46,11 @@ export const ExpressionCard: React.FC<SceneProps> = ({
 		extrapolateRight: 'clamp',
 	});
 
-	// Anchor the result to the spoken word when alignment data names it.
-	const resultTrigger = expression?.resolved
-		? findTrigger(word_triggers, expression.resolved.replace(/[(),\s]/g, '').slice(0, 12))
-		: undefined;
-	const resultProgress = useCueProgress(resultTrigger, {durationMs: 450});
+	// Anchor the result to the word the annotator named (R5). triggerFor falls
+	// back to matching the resolved text for specs written before cue_word existed.
+	const resultProgress = useCueProgress(triggerFor(expression, word_triggers), {
+		durationMs: 450,
+	});
 
 	return (
 		<div
@@ -143,36 +144,23 @@ export const ExpressionCard: React.FC<SceneProps> = ({
 					}}
 				>
 					{items.map((item, i) => (
-						<WordCue
+						<div
 							key={`${item.label}-${i}`}
-							word={item.resolved ?? item.label}
-							triggers={word_triggers}
+							style={{
+								padding: `${m.space(2)}px ${m.space(2.6)}px`,
+								borderRadius: m.space(1.2),
+								border: `1px solid ${theme.muted_color}44`,
+								minWidth: m.space(24),
+							}}
 						>
-							<div
-								style={{
-									display: 'flex',
-									flexDirection: 'column',
-									gap: m.space(0.8),
-									padding: `${m.space(2)}px ${m.space(2.6)}px`,
-									borderRadius: m.space(1.2),
-									border: `1px solid ${theme.muted_color}44`,
-									minWidth: m.space(24),
-								}}
-							>
-								<div style={{fontSize: m.fontSize('caption'), color: theme.muted_color}}>
-									{item.label}
-								</div>
-								<div style={{fontSize: m.fontSize('title'), fontWeight: 600}}>
-									{item.resolved ?? '—'}
-									{item.unit ? (
-										<span style={{fontSize: m.fontSize('body'), color: theme.muted_color}}>
-											{' '}
-											{item.unit}
-										</span>
-									) : null}
-								</div>
-							</div>
-						</WordCue>
+							<ValueBlock
+								value={item}
+								triggers={word_triggers}
+								theme={theme}
+								m={m}
+								size="title"
+							/>
+						</div>
 					))}
 				</div>
 			) : null}

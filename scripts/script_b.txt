@@ -1,0 +1,13 @@
+Why Compound Interest Feels Like Magic
+
+Most people think about growth in straight lines. Save a little each month, and the total climbs steadily, one step at a time. But money that earns interest on its own interest does not climb in a line at all. It curves upward, and the longer you wait, the steeper that curve becomes.
+
+Here is the mechanism. Suppose you invest one thousand dollars at seven percent annual interest. After the first year you have a bit more than you started with. But in the second year, the interest is calculated on the new, larger balance. Your gains start generating gains of their own.
+
+The arithmetic is simple but the consequences are not. To find the balance after any number of years, we multiply the principal by one point zero seven raised to the number of years. After ten years, one thousand dollars becomes 1967 dollars. After thirty years, that same one thousand dollars becomes 7612 dollars.
+
+Notice what happened between year ten and year thirty. The first decade added roughly 967 dollars. The third decade added far more, even though the interest rate never changed and you never deposited another cent.
+
+There is a shortcut for estimating this. Divide seventy-two by the interest rate, and you get the approximate number of years for money to double. At seven percent, seventy-two divided by seven is about ten point three years. So a balance doubles roughly every decade, then doubles again, and again.
+
+That doubling is the whole story. Nothing about compound interest is actually magical. It is simply that human intuition is built for addition, and compounding is multiplication wearing a disguise.

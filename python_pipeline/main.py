@@ -1,12 +1,18 @@
 """Pipeline orchestrator and CLI (R1).
 
-Phase 0 scope — the walking skeleton. A hardcoded two-scene spec is carried all
-the way to a playing MP4, exercising every structural decision that is expensive
-to change later: the IR, ms-based timings, native word alignment, the two-tier
-cache, video-only rendering, continuous-audio assembly, single mux.
+Stages, in order:
 
-Script ingestion (segmenter, annotator, evaluator) lands in Phase 2 and slots in
-ahead of stage 2 below without disturbing anything downstream.
+    script  --1--> segments        deterministic Python (segmenter.py)
+            --2--> annotations     the LLM's only job (llm_annotator.py)
+            --3--> resolved IR     symbolic evaluation (evaluator.py)
+            --4--> audio + timings TTS + aligner, per scene, cached
+            --5--> one PCM track   frame-quantised (audio_track.py)
+            --6--> scene MP4s      video-only, cached (renderer.py)
+            --7--> final MP4       a single mux (mux.py)
+            --8--> scene_spec.json the inspectable artifact (R6)
+
+Every stage boundary is a cache boundary, which is what makes an edit to one
+scene re-render one scene (R8).
 """
 
 from __future__ import annotations
@@ -18,11 +24,31 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import audio_track, mux
+from . import annotate as annotate_mod
+from . import audio_track, evaluator, mux, segmenter
 from .align.native import NativeAligner
-from .cache import Cache, CacheReport, align_key, audio_key, render_key, sha256_obj, sha256_text
+from .cache import (
+    Cache,
+    CacheReport,
+    align_key,
+    audio_key,
+    render_key,
+    sha256_obj,
+    sha256_text,
+    spec_key,
+)
+from .env import load_env, redact
+from .llm_annotator import LLMError, get_annotator, prompt_fingerprint_for
 from .renderer import get_renderer
-from .schema import Config, DerivedFrom, Provenance, Scene, SceneSpec, WordTrigger
+from .schema import (
+    Annotation,
+    Config,
+    DerivedFrom,
+    Provenance,
+    Scene,
+    SceneSpec,
+    WordTrigger,
+)
 from .tts.edge import EdgeTTS
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -36,13 +62,19 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def get_tts(cfg: Config):
     name = cfg.providers.tts
+    if name == "cartesia":
+        from .tts.cartesia import CartesiaTTS
+
+        return CartesiaTTS(model_id=cfg.tts.model, language=cfg.tts.language)
     if name == "edge-tts":
         return EdgeTTS()
     if name == "piper":
         from .tts.piper import PiperTTS  # Phase 3
 
         return PiperTTS()
-    raise ValueError(f"Unknown TTS provider: {name!r} (available: edge-tts, piper)")
+    raise ValueError(
+        f"Unknown TTS provider: {name!r} (available: cartesia, edge-tts, piper)"
+    )
 
 
 def get_aligner(cfg: Config):
@@ -142,38 +174,178 @@ def skeleton_spec() -> SceneSpec:
 
 
 # ---------------------------------------------------------------------------
+# Stage 1-3: script -> annotated, resolved IR
+# ---------------------------------------------------------------------------
+
+
+def build_spec_from_script(
+    script_text: str, cfg: Config, spec_cache: Cache, report: CacheReport, args: argparse.Namespace
+) -> tuple[SceneSpec, str, str]:
+    """Run segmentation, annotation and evaluation.
+
+    Returns (spec, annotator_name, model_id). The annotator actually used is
+    returned rather than the one configured, because falling back to the
+    heuristic path silently would make provenance a lie.
+    """
+    # -- stage 1: deterministic segmentation --------------------------------
+    title, segments = segmenter.segment_and_verify(
+        script_text,
+        target_seconds=cfg.segmentation.target_seconds,
+        min_seconds=cfg.segmentation.min_seconds,
+        max_seconds=cfg.segmentation.max_seconds,
+        words_per_minute=cfg.segmentation.words_per_minute,
+    )
+    total_words = sum(s.word_count for s in segments)
+    log(
+        f"segmented: {len(segments)} scenes, {total_words} words, "
+        f"~{sum(s.estimated_seconds for s in segments) / 60:.1f} min estimated"
+    )
+    if title:
+        log(f"title: {title!r} (not narrated)")
+
+    # -- stage 2: annotation ------------------------------------------------
+    requested = args.annotator or cfg.providers.llm
+    annotator = get_annotator(requested)
+    model_id = getattr(annotator, "model", annotator.name)
+    fingerprint = prompt_fingerprint_for(annotator)
+
+    # The cache key covers the *normalised* script, so trailing-whitespace edits
+    # do not force a re-annotation, while any real text change does.
+    normalized = segmenter.normalize_script(script_text)
+    key = spec_key(
+        script=normalized,
+        prompt=fingerprint,
+        model_id=model_id,
+        schema_version=cfg.schema_version,
+    )
+
+    cached = spec_cache.get_json(key)
+    if cached is not None:
+        annotations = [Annotation.model_validate(a) for a in cached]
+        report.record("annotate", "script", True, key)
+        log(f"annotations: {len(annotations)} from cache ({annotator.name})")
+    else:
+        log(f"annotating {len(segments)} segments with {annotator.name} ({model_id})")
+        try:
+            annotations = annotator.annotate(title, segments)
+        except LLMError as exc:
+            # R2: the demo must still produce a video. Loud, not silent.
+            log(f"WARNING: {annotator.name} annotation failed: {exc}")
+            log("WARNING: falling back to the offline heuristic annotator")
+            from .heuristic_annotator import HeuristicAnnotator
+
+            annotator = HeuristicAnnotator()
+            model_id = annotator.name
+            annotations = annotator.annotate(title, segments)
+            key = spec_key(
+                script=normalized,
+                prompt=prompt_fingerprint_for(annotator),
+                model_id=model_id,
+                schema_version=cfg.schema_version,
+            )
+        spec_cache.put_json(key, [a.model_dump() for a in annotations])
+        report.record("annotate", "script", False, key, "script/prompt/model changed")
+
+    annotations, warnings = annotate_mod.reconcile(annotations, segments)
+    for warning in warnings:
+        log(f"  annotation repair: {warning}")
+
+    spec = annotate_mod.build_spec(title or "Untitled", segments, annotations)
+
+    # -- stage 3: symbolic evaluation (R4) ----------------------------------
+    resolutions = evaluator.resolve_scene_spec(spec)
+    computed = sum(1 for r in resolutions if r.computed)
+    log(f"resolved {len(resolutions)} on-screen values, {computed} computed from expressions")
+    if args.explain_values:
+        print("\n" + evaluator.render_resolutions(resolutions) + "\n")
+
+    templates = ", ".join(f"{s.scene_id}:{s.template_name}" for s in spec.scenes)
+    log(f"templates: {templates}")
+    return spec, annotator.name, model_id
+
+
+# ---------------------------------------------------------------------------
 # The pipeline
 # ---------------------------------------------------------------------------
 
 
 def run(args: argparse.Namespace) -> int:
     t0 = time.perf_counter()
+    loaded_keys = load_env()
+    if loaded_keys:
+        log(f".env loaded: {', '.join(sorted(loaded_keys))}")
+
     cfg = load_config(Path(args.config), args.profile)
     cache_root = Path(args.cache_dir)
     use_cache = not args.no_cache
     report = CacheReport()
 
+    spec_cache = Cache(cache_root, "spec", enabled=use_cache)
     audio_cache = Cache(cache_root, "audio", enabled=use_cache)
     align_cache = Cache(cache_root, "align", enabled=use_cache)
     scene_cache = Cache(cache_root, "scenes", enabled=use_cache)
 
     # -- stage 1: obtain the IR ------------------------------------------------
+    annotator_name = "none"
+    llm_model = "none"
     if args.spec:
-        # R6: re-render from an edited spec, no LLM involved.
+        # R6: re-render from an edited spec, no LLM and no segmentation involved.
         spec = SceneSpec.model_validate_json(Path(args.spec).read_text("utf-8"))
         log(f"loaded spec: {args.spec} ({len(spec.scenes)} scenes)")
+        # An edited spec may carry a new `expr`, so values are re-resolved. Edit
+        # expr="2**8" to expr="2**10" and re-run: the number on screen changes
+        # without the LLM being consulted. That is the R4 + R6 demo.
+        resolutions = evaluator.resolve_scene_spec(spec)
+        log(f"re-resolved {len(resolutions)} values from the edited spec")
+        if args.explain_values:
+            print("\n" + evaluator.render_resolutions(resolutions) + "\n")
     elif args.script:
-        # Phase 2 replaces this branch with segmenter -> annotator -> evaluator.
-        log(f"NOTE: script ingestion arrives in Phase 2; using the skeleton spec")
-        spec = skeleton_spec()
+        script_text = Path(args.script).read_text("utf-8")
+        spec, annotator_name, llm_model = build_spec_from_script(
+            script_text, cfg, spec_cache, report, args
+        )
     else:
         spec = skeleton_spec()
         log("no --script/--spec given; using the built-in skeleton spec")
+
+    if args.dry_run:
+        # Annotation and evaluation take seconds; TTS and rendering take minutes.
+        # Iterating on a prompt or a template choice should not pay for a render.
+        out_path = Path(args.out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        spec_path = out_path.with_suffix(".spec.json")
+        spec.provenance = Provenance(
+            script_sha256=sha256_text(Path(args.script).read_text("utf-8")) if args.script else "",
+            llm_model=llm_model,
+            annotator=annotator_name,
+            theme_sha256=sha256_obj(cfg.theme.model_dump()),
+            fps=cfg.project.fps,
+            width=cfg.project.width,
+            height=cfg.project.height,
+            output_scale=cfg.project.output_scale,
+        )
+        spec_path.write_text(
+            json.dumps(spec.model_dump(), indent=2, ensure_ascii=False, sort_keys=True),
+            encoding="utf-8",
+        )
+        log(f"dry run: wrote {spec_path} (no audio, no render)")
+        log(f"elapsed {time.perf_counter() - t0:.1f}s")
+        if args.explain_cache:
+            print("\n" + report.render())
+        return 0
 
     theme_sha = sha256_obj(cfg.theme.model_dump())
     tts = get_tts(cfg)
     aligner = get_aligner(cfg)
     renderer = get_renderer(cfg, ROOT / "remotion_engine")
+
+    # Voice identifiers are provider-specific, so resolve once against the
+    # active provider rather than assuming a single global voice string.
+    voice = cfg.tts.voice_for(tts.name)
+    # Only Cartesia varies by model; other providers report "-" so the value is
+    # still a stable, explicit part of the cache key.
+    tts_model = cfg.tts.model if tts.name == "cartesia" else "-"
+    log(f"tts: {tts.name} voice={voice} model={tts_model} | aligner: {aligner.name}")
 
     # -- stage 2: audio + alignment per scene ---------------------------------
     scene_pcms: list[tuple[str, Any]] = []
@@ -181,9 +353,10 @@ def run(args: argparse.Namespace) -> int:
         a_key = audio_key(
             normalized_text=scene.narration_text,
             provider=tts.name,
-            voice=cfg.tts.voice,
+            voice=voice,
             rate=cfg.tts.rate,
             sample_rate=cfg.tts.sample_rate,
+            model=tts_model,
         )
         cached_wav = audio_cache.get(a_key, ".wav")
         if cached_wav:
@@ -196,7 +369,7 @@ def run(args: argparse.Namespace) -> int:
             log(f"synthesising {scene.scene_id} ({len(scene.narration_text)} chars)")
             result = tts.synthesize(
                 scene.narration_text,
-                voice=cfg.tts.voice,
+                voice=voice,
                 rate=cfg.tts.rate,
                 sample_rate=cfg.tts.sample_rate,
             )
@@ -226,7 +399,7 @@ def run(args: argparse.Namespace) -> int:
                 log(f"re-synthesising {scene.scene_id} to recover word timings")
                 result = tts.synthesize(
                     scene.narration_text,
-                    voice=cfg.tts.voice,
+                    voice=voice,
                     rate=cfg.tts.rate,
                     sample_rate=cfg.tts.sample_rate,
                 )
@@ -317,9 +490,15 @@ def run(args: argparse.Namespace) -> int:
     # -- stage 6: write the IR alongside the video (R6 submission artifact) ---
     spec.provenance = Provenance(
         script_sha256=sha256_text(Path(args.script).read_text("utf-8")) if args.script else "",
-        llm_model=cfg.providers.llm,
+        # What actually ran, not what config would have used. When the LLM is
+        # unreachable the run falls back to the heuristic annotator, and a
+        # provenance block claiming a model that never answered is worse than
+        # one that admits it.
+        llm_model=llm_model,
+        annotator=annotator_name,
         tts_provider=tts.name,
-        tts_voice=cfg.tts.voice,
+        tts_voice=voice,
+        tts_model=tts_model,
         aligner=aligner.name,
         fps=cfg.project.fps,
         width=cfg.project.width,
@@ -364,15 +543,24 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", default="output/video.mp4", help="output .mp4 path")
     p.add_argument("--config", default=str(ROOT / "config.yaml"))
     p.add_argument("--profile", help="config profile to overlay, e.g. portrait")
+    p.add_argument(
+        "--annotator",
+        help="override providers.llm for this run: a model id, or 'heuristic' to skip the LLM",
+    )
     p.add_argument("--cache-dir", default=str(ROOT / ".cache"))
     p.add_argument("--no-cache", action="store_true", help="ignore all cached artifacts")
     p.add_argument(
         "--explain-cache", action="store_true", help="print per-scene cache hit/miss (R8)"
     )
     p.add_argument(
-        "--from-stage",
-        choices=["audio", "align", "render", "mux"],
-        help="resume from a stage (reserved for Phase 1)",
+        "--explain-values",
+        action="store_true",
+        help="print every on-screen value with the expression it came from (R4)",
+    )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="stop after writing the spec: no TTS, no render (fast annotation check)",
     )
     return p
 

@@ -35,14 +35,32 @@ segmentation:
   words_per_minute: 165
 
 providers:
-  llm: "claude-opus-5"
-  tts: "edge-tts"       # edge-tts | piper | elevenlabs
+  # Annotation only — the LLM never computes, never chooses scene boundaries and
+  # never emits code. Dispatch is by vendor prefix (llm_annotator.get_annotator),
+  # so any gemini-* or claude-* model id works without a code change, and
+  # "heuristic" runs the offline rule-based annotator with no key at all.
+  llm: "gemini-2.5-flash"
+  # cartesia is the primary provider (quality + word timestamps).
+  # edge-tts remains the fallback: free, no key, and it works offline of any
+  # paid account — so a dead key at the live review still yields a video.
+  tts: "edge-tts"       # cartesia | edge-tts | piper
   aligner: "native"     # native | whisperx
   assets: "null"        # null | icon_pack
   renderer: "remotion"
 
 tts:
-  voice: "en-US-AriaNeural"
+  # One voice per provider: a voice id is provider-specific (Cartesia uses a
+  # UUID, edge-tts a name), so switching providers must not require editing the
+  # voice too (R7).
+  voices:
+    cartesia: "bf0a246a-8642-498a-9950-80c35e9276b5"
+    edge-tts: "en-US-AriaNeural"
+    piper: "en_US-lessac-medium"
+  # voice:              # uncomment to override the table for every provider
+  model: "sonic-3.5"    # Cartesia model_id; ignored by other providers
+  language: "en"
+  # Provider-neutral rate. Each provider translates: edge-tts takes it directly,
+  # Cartesia maps it onto generation_config.speed (0.6-1.5).
   rate: "+0%"
   # Canonical PCM format. All hashing happens on decoded samples in this format,
   # never on container bytes (see context.md §6 Stage 5).
