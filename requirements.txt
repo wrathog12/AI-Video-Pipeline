@@ -11,6 +11,12 @@ soundfile==0.13.1         # WAV decode/encode (libsndfile)
 google-genai==1.74.0      # default annotator: Gemini structured outputs + seed
 requests==2.32.5          # Cartesia TTS streams over SSE; no SDK needed
 
+# --- Dashboard (`./run --serve`) ---
+# Not needed to render. main.py imports these lazily, so a checkout without them
+# still runs the whole pipeline from the CLI — it only loses `--serve`.
+fastapi==0.136.1          # two pages, an SSE progress stream and a few JSON routes
+uvicorn==0.46.0           # ASGI server, bound to 127.0.0.1 by default
+
 # --- Optional alternates (R7). Not on the default path. ---
 # anthropic>=0.75.0       # providers.llm: claude-*  (ClaudeAnnotator)
 # num2words==0.5.14       # numeral expansion, only needed by the whisperx aligner

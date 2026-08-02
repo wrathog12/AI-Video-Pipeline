@@ -623,11 +623,42 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="stop after writing the spec: no TTS, no render (fast annotation check)",
     )
+
+    # The dashboard lives behind the same entry point rather than a second script,
+    # because `./run --serve` is one thing to remember and, more importantly, because
+    # the server then starts runs by invoking this very module (see server/runs.py).
+    # There is one CLI (R1); the dashboard is a client of it, not a sibling of it.
+    ui = p.add_argument_group("dashboard")
+    ui.add_argument(
+        "--serve",
+        action="store_true",
+        help="start the timeline + settings dashboard instead of rendering",
+    )
+    ui.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="--serve bind address; anything but loopback exposes an unauthenticated RCE",
+    )
+    ui.add_argument("--port", type=int, default=8000, help="--serve port")
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.serve:
+        # Imported here, not at module scope: fastapi and uvicorn are dashboard-only
+        # dependencies, and a missing one must not stop a plain render from working.
+        try:
+            from .server.app import main as serve
+        except ImportError as exc:
+            print(
+                f"[engine] FAILED: the dashboard needs fastapi and uvicorn ({exc}).\n"
+                "[engine] Install them with: pip install -r requirements.txt\n"
+                "[engine] Rendering does not need them; only --serve does.",
+                file=sys.stderr,
+            )
+            return 1
+        return serve(["--host", args.host, "--port", str(args.port)])
     try:
         return run(args)
     except Exception as exc:  # noqa: BLE001 - a CLI should not dump a traceback

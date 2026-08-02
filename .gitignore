@@ -22,8 +22,11 @@ output/**
 !output/script_a.spec.json
 
 # Bundled fonts are committed deliberately — render-time font fetching is both a
-# network dependency and a determinism hazard (see context.md, Stage 6).
-!remotion_engine/fonts/**
+# network dependency and a determinism hazard (see context.md, Stage 6). They live
+# under public/ because staticFile() is the only way into the bundle: a font written
+# to remotion_engine/fonts/ is one the renderer cannot open, and it fails silently as
+# fallback typography. Re-fetch with `python -m python_pipeline.vendor_fonts`.
+!remotion_engine/public/fonts/**
 
 # Vendored Noto Emoji SVGs (Apache-2.0, ~2-40 KB each) are committed for the same
 # reason as the fonts: a frame must be a function of the repository, not of

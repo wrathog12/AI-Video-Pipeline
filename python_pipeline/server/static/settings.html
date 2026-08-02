@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Settings · AI Video Engine</title>
+		<link rel="stylesheet" href="style.css" />
+	</head>
+	<body>
+		<header>
+			<h1>AI Video Engine <span>· configurable surface</span></h1>
+			<nav>
+				<a href="index.html">Timeline</a>
+				<a href="settings.html" class="active">Settings</a>
+			</nav>
+		</header>
+
+		<main>
+			<!-- What these two buttons mean --------------------------------->
+			<section class="panel">
+				<div class="spread">
+					<div>
+						<h2>Two ways to apply a change</h2>
+						<p class="hint" style="margin-bottom: 0">
+							<strong>Run with these</strong> keeps the edit in your browser and
+							writes it into <code>.cache/runs/&lt;id&gt;/config.yaml</code> for
+							that run only — so trying six palettes leaves no git diff.
+							<strong>Save to config.yaml</strong> edits the committed file, which
+							changes the default for the CLI too. The second is never implicit.
+						</p>
+					</div>
+					<span id="dirty-badge" class="badge off">no pending changes</span>
+				</div>
+				<div class="row" style="margin-top: 16px">
+					<button id="apply" class="primary">Run with these</button>
+					<button id="save">Save to config.yaml</button>
+					<button id="revert">Discard pending</button>
+					<a class="btn" href="index.html">Go to timeline →</a>
+				</div>
+				<div id="notice" hidden></div>
+			</section>
+
+			<!-- Providers ---------------------------------------------------->
+			<section class="panel">
+				<h2>Providers (R7)</h2>
+				<p class="hint">
+					Each of these is an interface with more than one implementation, so
+					swapping one is a config edit rather than a code change. Options that
+					cannot run on this machine are shown disabled with the reason —
+					<em>probed</em> at page load by importing the module or checking for a key,
+					not declared in a list. A dropdown that offers a provider which would
+					crash is worse than no dropdown.
+				</p>
+				<div class="grid-2">
+					<label class="field">
+						<span class="name">LLM (annotation only)</span>
+						<select id="providers.llm" data-field></select>
+						<span class="why" id="why-llm">
+							It labels fixed segments. It never segments, never computes a value
+							and never emits code.
+						</span>
+					</label>
+					<label class="field">
+						<span class="name">TTS</span>
+						<select id="providers.tts" data-field></select>
+						<span class="why" id="why-tts"></span>
+					</label>
+					<label class="field">
+						<span class="name">Word alignment</span>
+						<select id="providers.aligner" data-field></select>
+						<span class="why" id="why-aligner"></span>
+					</label>
+					<label class="field">
+						<span class="name">Visual assets</span>
+						<select id="providers.assets" data-field></select>
+						<span class="why" id="why-assets"></span>
+					</label>
+				</div>
+				<p class="note">
+					<code>providers.renderer</code> is intentionally not editable here: it
+					selects a code path that shells out to <code>npx remotion</code> and has
+					exactly one implementation, so a dropdown would be attack surface with no
+					feature behind it.
+				</p>
+				<div id="env" class="row small muted" style="margin-top: 14px"></div>
+			</section>
+
+			<!-- Typography + palette ----------------------------------------->
+			<section class="panel">
+				<h2>Typography &amp; palette (R7)</h2>
+				<p class="hint">
+					Only fonts actually vendored under
+					<code>remotion_engine/public/fonts/</code> are listed. A font name in a
+					config file is not a font: this dropdown set a string the renderer ignored
+					until <code>src/fonts.ts</code> started registering the faces, so the list
+					is built from files on disk.
+				</p>
+				<div class="grid-2">
+					<div>
+						<label class="field">
+							<span class="name">Font family</span>
+							<select id="theme.font_family" data-field></select>
+							<span class="why" id="why-font"></span>
+						</label>
+						<label class="field">
+							<span class="name">Type scale base (vmin)</span>
+							<input
+								type="number"
+								id="theme.type_scale_base_vmin"
+								data-field
+								step="0.1"
+								min="1.5"
+								max="6"
+							/>
+							<span class="why">
+								Every size is a multiple of this, in vmin — never hardcoded px, so
+								9:16 rescales instead of breaking.
+							</span>
+						</label>
+						<label class="field">
+							<span class="name">Minimum font size (px)</span>
+							<input
+								type="number"
+								id="theme.min_font_px"
+								data-field
+								step="1"
+								min="8"
+								max="96"
+							/>
+							<span class="why">
+								R4 legibility floor, enforced <em>after</em>
+								<code>output_scale</code> — the point at which text usually
+								becomes unreadable.
+							</span>
+						</label>
+					</div>
+					<div>
+						<div class="swatches" id="swatches"></div>
+					</div>
+				</div>
+
+				<h2 style="margin-top: 22px">Preview</h2>
+				<p class="hint">
+					Rendered by your browser using the same vendored font files the engine
+					loads, so this shows the real typeface — not an approximation. It is not a
+					frame grab: only a render proves the frame.
+				</p>
+				<div class="preview" id="preview">
+					<div class="rule"></div>
+					<div class="h">How Computers See Color</div>
+					<div class="s">Bridging reality and machine's brain</div>
+					<div class="v">16,777,216</div>
+					<div class="s" style="margin: 6px 0 0">Total unique colours</div>
+				</div>
+			</section>
+
+			<!-- Output format ------------------------------------------------>
+			<section class="panel">
+				<h2>Output format (R7)</h2>
+				<p class="hint">
+					Canvas is authoritative; aspect ratio is derived from it, not the reverse.
+					For the 9:16 demo, pick the <code>portrait</code> profile on the timeline
+					page instead of retyping 1080×1920 — that proves the overlay works.
+				</p>
+				<div class="grid-2">
+					<div>
+						<div class="row">
+							<label class="field" style="flex: 1">
+								<span class="name">Width</span>
+								<input type="number" id="project.width" data-field step="2" min="256" max="3840" />
+							</label>
+							<label class="field" style="flex: 1">
+								<span class="name">Height</span>
+								<input type="number" id="project.height" data-field step="2" min="256" max="3840" />
+							</label>
+						</div>
+						<div class="row" id="presets"></div>
+						<label class="field" style="margin-top: 14px">
+							<span class="name">Orientation</span>
+							<select id="project.orientation" data-field>
+								<option value="auto">auto (derive from width/height)</option>
+								<option value="landscape">landscape</option>
+								<option value="portrait">portrait</option>
+							</select>
+						</label>
+					</div>
+					<div>
+						<label class="field">
+							<span class="name">FPS</span>
+							<input type="number" id="project.fps" data-field step="1" min="1" max="120" />
+							<span class="why">
+								Audio is padded so every scene boundary lands on a frame edge, so
+								this changes the padding, not just the file header.
+							</span>
+						</label>
+						<label class="field">
+							<span class="name">Output scale</span>
+							<input
+								type="number"
+								id="project.output_scale"
+								data-field
+								step="0.0005"
+								min="0.1"
+								max="1"
+							/>
+							<span class="why" id="why-scale"></span>
+						</label>
+						<div id="geometry" class="kv"></div>
+					</div>
+				</div>
+			</section>
+
+			<!-- Environment -------------------------------------------------->
+			<section class="panel">
+				<h2>Credentials</h2>
+				<p class="hint">
+					Key <strong>names</strong> only — never values, never a prefix, never a
+					length. <code>load_env()</code> returns names for exactly this reason: a
+					dashboard is a log with a browser attached. To change a key, edit
+					<code>.env</code>; this page re-probes on reload.
+				</p>
+				<div id="keys" class="row"></div>
+			</section>
+		</main>
+
+		<script src="app.js"></script>
+		<script src="settings.js"></script>
+	</body>
+</html>

@@ -9,6 +9,7 @@
 
 import React from 'react';
 
+import {ensureFontsLoaded} from './fonts';
 import {BigNumber} from './templates/BigNumber';
 import {ComparisonGrid} from './templates/ComparisonGrid';
 import {ExpressionCard} from './templates/ExpressionCard';
@@ -65,6 +66,11 @@ class TemplateBoundary extends React.Component<
 }
 
 export const SceneDispatcher: React.FC<Partial<SceneProps>> = (raw) => {
+	// Before the first paint, and outside an effect: an effect runs after React has
+	// already committed, by which time Remotion may have captured frame 0 with
+	// fallback typography. delayRender inside this call is what holds the capture.
+	ensureFontsLoaded();
+
 	// Defaults so a partially-specified --props payload still renders.
 	const scene: SceneProps = {
 		scene_id: raw.scene_id ?? 'scene_unknown',

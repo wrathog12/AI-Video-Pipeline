@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Timeline · AI Video Engine</title>
+		<link rel="stylesheet" href="style.css" />
+	</head>
+	<body>
+		<header>
+			<h1>AI Video Engine <span>· pipeline timeline</span></h1>
+			<nav>
+				<a href="index.html" class="active">Timeline</a>
+				<a href="settings.html">Settings</a>
+			</nav>
+		</header>
+
+		<main>
+			<!-- Launch ------------------------------------------------------->
+			<section class="panel">
+				<div class="spread">
+					<div>
+						<h2>Run</h2>
+						<p class="hint" style="margin-bottom: 0">
+							Every run shells out to
+							<code>python -m python_pipeline.main</code> — the same entry point
+							as the CLI (R1), so this page cannot behave differently from the
+							command line.
+						</p>
+					</div>
+					<span id="state-badge" class="badge off">idle</span>
+				</div>
+
+				<div class="grid-2" style="margin-top: 16px">
+					<div>
+						<label class="field">
+							<span class="name">Script</span>
+							<select id="script"></select>
+							<span class="why">From <code>scripts/</code>.</span>
+						</label>
+						<label class="field">
+							<span class="name">…or paste one</span>
+							<textarea
+								id="script-text"
+								placeholder="Paste Script B here. It is saved into the run directory, so provenance still hashes a real file."
+							></textarea>
+						</label>
+					</div>
+					<div>
+						<label class="field">
+							<span class="name">…or re-render an existing spec (R6)</span>
+							<select id="spec"></select>
+							<span class="why">
+								Skips the LLM entirely and renders the IR as written. Edit a
+								value in the JSON, pick it here, and watch only what changed
+								re-render.
+							</span>
+						</label>
+						<label class="field">
+							<span class="name">Profile</span>
+							<select id="profile"></select>
+							<span class="why">
+								Config overlay. <code>portrait</code> is the 9:16 demo.
+							</span>
+						</label>
+						<div class="row">
+							<label class="row small" style="gap: 6px">
+								<input type="checkbox" id="dry-run" />
+								Dry run (spec only, no TTS or render)
+							</label>
+							<label class="row small" style="gap: 6px">
+								<input type="checkbox" id="no-cache" />
+								Ignore cache
+							</label>
+						</div>
+					</div>
+				</div>
+
+				<div class="row" style="margin-top: 4px">
+					<button id="go" class="primary">Run pipeline</button>
+					<button id="stop" class="danger" disabled>Stop</button>
+					<span id="settings-note" class="muted small"></span>
+				</div>
+				<div id="launch-error" class="errbox" hidden></div>
+			</section>
+
+			<!-- Stages ------------------------------------------------------->
+			<section class="panel">
+				<h2>Stages</h2>
+				<p class="hint">
+					Parsed from the engine's own stdout. The pipeline does not know this
+					page exists — an unrecognised line still shows verbatim in the log
+					below.
+				</p>
+				<div class="stages" id="stages"></div>
+			</section>
+
+			<!-- Timeline ----------------------------------------------------->
+			<section class="panel">
+				<div class="spread">
+					<div>
+						<h2>Scene timeline</h2>
+						<p class="hint" style="margin-bottom: 0">
+							Block width is proportional to <code>duration_ms</code> from the
+							IR, so this is the planned video in time. Before the spec is
+							written, blocks are equal-width placeholders.
+						</p>
+					</div>
+					<span id="timeline-meta" class="muted small"></span>
+				</div>
+				<div class="ribbon" id="ribbon"></div>
+				<div class="axis" id="axis"></div>
+				<div id="scene-detail" style="margin-top: 16px"></div>
+			</section>
+
+			<!-- Log ---------------------------------------------------------->
+			<section class="panel">
+				<div class="spread">
+					<h2>Engine log</h2>
+					<label class="row small muted" style="gap: 6px">
+						<input type="checkbox" id="follow" checked /> follow
+					</label>
+				</div>
+				<div class="log" id="log"></div>
+				<div id="warnings"></div>
+			</section>
+
+			<!-- Output ------------------------------------------------------->
+			<section class="panel">
+				<h2>Output</h2>
+				<p class="hint" id="output-hint">Nothing yet.</p>
+				<div class="dl" id="downloads"></div>
+				<div id="player" style="margin-top: 16px"></div>
+			</section>
+
+			<!-- History ------------------------------------------------------>
+			<section class="panel">
+				<h2>Recent runs</h2>
+				<p class="hint">
+					Held in memory only — a restart forgets the list, not the artifacts.
+					They stay under <code>.cache/runs/</code>.
+				</p>
+				<div id="history" class="dl"></div>
+			</section>
+		</main>
+
+		<script src="app.js"></script>
+		<script src="timeline.js"></script>
+	</body>
+</html>

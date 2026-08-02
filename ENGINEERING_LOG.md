@@ -678,3 +678,145 @@ same keyword, which is how the 🌱-vs-📈 collision on "grow" was found.
   annotation shape and read the medium better than a grid of text. Bar widths are geometry only —
   every label on screen is still `value.resolved` verbatim, so a rounding difference in a width can
   never become a wrong number on screen.
+
+---
+
+## Dead end 13 — `theme.font_family` was config that nothing read, for three phases
+
+**What I expected.** `config.yaml` has `theme.font_family: "Inter"`. `theme.ts` passes the theme into
+every template. Templates set `fontFamily` from it. R7's "typography must be configurable" therefore
+held, and the box was ticked in three consecutive status writeups.
+
+**What actually happened.** I went looking for the font files before building a dropdown for them,
+and there were none. `remotion_engine/fonts/` existed with a `.gitkeep` and nothing else. No component
+called `loadFont`, no `FontFace` anywhere, `@remotion/fonts` was not in `package.json`. Every frame
+ever rendered by this project used Chromium's default sans-serif, and `font_family` was a string that
+travelled from YAML into a CSS property naming a family the browser did not have.
+
+**Why it stayed invisible.** A missing font family does not error. CSS falls back, silently, to
+something that still looks like text — and the fallback is a clean sans-serif, so the frames looked
+*fine*. Compare Dead end 1 (missing word timings) which announced itself as an empty list, or Dead
+end 9 (a bad expression) which killed the render. This failure mode produces a plausible-looking
+artifact, which is the worst kind: there is no moment at which the system tells you.
+
+There is a second reason it survived. `context.md` §6 said "Fonts bundled in `remotion_engine/fonts/`
+and loaded via `@remotion/fonts` from disk." I had read that sentence several times as *documentation
+of the build* rather than as *an instruction not yet carried out*, and the directory existing (with
+only a `.gitkeep`) was enough to make it look done. A specification and a state are different
+documents; a tree with a checkmark in it invites exactly this confusion — the same error as the four
+0-byte root files, and the third time this project has been bitten by "the file exists" not meaning
+"the file is written."
+
+**Hypothesis.** Vendor the fonts at build time and register them explicitly, then prove the choice
+reaches pixels rather than assuming it.
+
+**What I did.**
+
+1. `python_pipeline/vendor_fonts.py` — one-time fetch of three OFL variable families (Inter,
+   Source Serif 4, JetBrains Mono) from the Google Fonts *repository* (not the API), with a
+   SHA-256-per-file `manifest.json`. Rejects a non-TrueType payload, because a CDN error page is HTML
+   served with a 200 and would otherwise be committed as a font.
+2. `remotion_engine/src/fonts.ts` — `new FontFace(...)` from `staticFile()`, `document.fonts.add`,
+   all inside `delayRender`/`continueRender`.
+3. Called `ensureFontsLoaded()` from the body of `SceneDispatcher`, not from an effect.
+
+**Three things went wrong on the way, each worth its own line.**
+
+- **The fonts went to the wrong directory first.** I wrote them to `remotion_engine/fonts/` because
+  that is what `context.md` specified. With no `@remotion/fonts` package installed, the only way to
+  reach a local file from inside the bundle is `staticFile()`, which resolves against `public/`. A
+  font written anywhere else is a font the renderer cannot open — and it would have failed *silently
+  as fallback typography*, i.e. reproduced the exact bug I was fixing, one layer down. `icons_dir()`
+  already recorded this lesson for SVGs; I did not transfer it.
+- **`delayRender` is load-bearing, not defensive.** Remotion screenshots a frame as soon as React
+  paints. A font resolving milliseconds later would land in *some* frames and not others — an R3
+  failure that presents as a rendering glitch. Registering fonts without holding the capture would
+  have traded a consistent wrong font for an inconsistent right one, which is worse.
+- **An effect is too late.** `useEffect` runs after React commits, by which point frame 0 may already
+  be captured. Hence the call in the component body.
+
+**Resolution — measured, not asserted.** Rendered three stills of Script A `scene_01` at frame 110,
+changing only `theme.font_family`:
+
+| `font_family` | rc | still SHA-256 |
+|---|---|---|
+| Inter | 0 | `da5a2909…` |
+| JetBrains Mono | 0 | `0ca0ca2e…` |
+| Source Serif 4 | 0 | `6004d829…` |
+
+Three distinct hashes, and I opened two of the PNGs: Inter renders as a neo-grotesque, Source Serif 4
+with real serifs. The setting now changes the frame instead of a string. `tsc --noEmit` needed
+`"DOM.Iterable"` added to `tsconfig.json`'s `lib` before it would accept `document.fonts.add`
+(TS2339) — fixed by widening the lib rather than casting, since the cast would have hidden a real
+type gap.
+
+**The generalisable lesson.** *A config key is not a feature until something reads it.* The dashboard
+this work was a prerequisite for now enforces that at the UI layer: `settings.font_options()` lists
+only families whose file is present on disk, so the dropdown cannot offer a typeface the renderer
+would ignore. That check is the entire reason `settings.py`'s docstring leads with this rule.
+
+---
+
+## Dead end 14 — Four dashboard bugs that only running it could find
+
+**What I expected.** The dashboard parses the engine's stdout into a stage timeline. I wrote the
+patterns by reading `main.py`'s `log()` calls, which is the authoritative list of every line the
+engine can print, so the parser should have been right by construction.
+
+**What actually happened.** I started the server and drove it through a dry run, a `--spec`
+re-render, a full script render and six invalid config saves. Four defects, none visible from reading:
+
+**1. `_PREFIX` stripped meaningful indentation.** The pattern was `^\[engine\]\s*`, and `\s*` eats the
+two spaces that the asset-picks line uses to mark itself as a detail line. `_ASSET_PICKS` requires
+`^\s{2}`, so it never matched: every scene reported `icon: None` while the log directly above it read
+`scene_01:apple, scene_02:eye, …`. Indentation is *semantic* in this output — a top-level line is a
+stage announcement, a two-space line belongs to the one above it — and normalising whitespace erased
+the distinction the parser depended on. Fixed to `^\[engine\] ?`.
+
+**2. A dry run's spec line is `dry run: wrote …spec.json`.** The pattern was `^wrote .*\.spec\.json`,
+so on the one path where writing the spec is the *entire point of the run*, the final stage stayed
+`pending` on a run that had finished everything asked of it.
+
+**3. Ordered stage promotion credited work that never happened.** "Reaching stage N means every
+earlier stage finished" is right on the normal path and necessary — stages whose only log line is
+their completion (`evaluate`, `track`) would otherwise never leave `pending`. But `--dry-run` skips
+audio/track/render/mux and `--spec` skips segment/annotate/assets, and back-filling marked all of them
+`done`. The dashboard claimed a render that never ran. Fixed with a fourth status, `skipped`, applied
+up front from the argv, each carrying a *reason* that replaces the stage's usual blurb — "keyword to
+vendored icon" is a lie on a run that matched no keywords, and a bare dash reads as a failure.
+
+**4. Saving a colour appended the old colour to the line as garbage.** The comment-preserving writer
+found the trailing `# comment` by searching for the first `#`. On `primary_color: "#E63946"` the first
+`#` is *inside the quoted value*, so the writer preserved `#E63946"` as a comment and produced:
+
+```yaml
+  primary_color: "#22C55E"   #E63946"
+```
+
+Every colour this thing writes is a hex string, so this was the common case, not an edge case. Fixed
+by tracking quote state and requiring whitespace before a `#` — which is what YAML itself requires,
+and is what makes the distinction decidable at all.
+
+**A fifth, found by `diff` rather than by the parser.** The first successful save produced an 87-line
+diff for a 5-line change. `Path.read_text` / `write_text` apply universal-newline translation, so
+reading LF and writing back on Windows produced CRLF throughout. Fixed with `newline=""` on both
+ends and by preserving the file's existing line ending in the join. This one matters more than it
+looks: a config writer that rewrites every line makes `git diff` useless for reviewing exactly the
+change a reviewer would most want to see.
+
+**A sixth, in the frontend, same family.** A `--spec` re-render never prints a scene list, so the
+timeline showed "No scenes yet" for the whole 400-second render. The input spec is on disk and already
+has ids, templates and real timings, so the server seeds the timeline from it at launch rather than
+waiting for the engine to announce what the input file already says.
+
+**Resolution.** Re-verified after each fix against a live server: dry run 9/9 stages resolved
+(4 `skipped` with reasons), `--spec` re-render rc=0 in 400 s with a 2.68 MB video and all four
+downloads serving, 409 on a concurrent start, six invalid-setting cases rejected 422 with the file
+unchanged (`sha256` compared before and after), and a five-setting save producing a five-line diff
+with all 38 comments intact.
+
+**The generalisable lesson.** Every one of these is a case where reading the code gave the right
+answer to the wrong question. I checked "does the parser handle every line `main.py` prints?" and it
+did — for the *shapes* of those lines. What it did not handle was the whitespace around them, the one
+path that phrases the line differently, the flags that make whole stages not happen, and the file's
+own line endings. Parsing is a claim about text, and text has to be run against, not reasoned about.

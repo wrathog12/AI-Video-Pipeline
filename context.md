@@ -94,7 +94,14 @@ project. Files marked ✓ exist; unmarked ones are planned.
 │   ├── mux.py                 ✓ # single final ffmpeg mux
 │   ├── verify_determinism.py  ✓ # frame + sample hash comparison of two runs (R3)
 │   ├── cue_check.py           ✓ # every cue_word resolves to a trigger (R5)
+│   ├── vendor_fonts.py        ✓ # one-time OFL font fetch → public/fonts + manifest
 │   ├── qa_ocr.py                # R4 legibility gate — stub, off by default
+│   ├── server/                  # the dashboard (`./run --serve`) — see §13
+│   │   ├── app.py             ✓ # FastAPI routes; comment-preserving config writes
+│   │   ├── runs.py            ✓ # subprocess supervision, stdout → stage timeline
+│   │   ├── settings.py        ✓ # the editable whitelist + availability probes
+│   │   └── static/            ✓ # index.html, settings.html, *.js, style.css
+│   │                            #   no build step, no bundler, no node_modules
 │   ├── tts/
 │   │   ├── base.py            ✓ # TTSProvider interface
 │   │   ├── edge.py            ✓ # edge-tts (+ native WordBoundary timings)
@@ -115,11 +122,12 @@ project. Files marked ✓ exist; unmarked ones are planned.
 │   ├── package.json           ✓
 │   ├── remotion.config.ts     ✓
 │   ├── .eslintrc.cjs          ✓ # the wall-clock ban — verified to actually fire
-│   ├── fonts/                 ✓ # bundled locally — never fetched at render time
+│   ├── public/fonts/          ✓ # 3 vendored OFL variable fonts + manifest.json
 │   ├── public/icons/          ✓ # vendored SVGs + manifest.json; staticFile() root
 │   └── src/
 │       ├── Root.tsx           ✓
 │       ├── SceneDispatcher.tsx ✓ # template_name → component, Fallback on miss
+│       ├── fonts.ts           ✓ # FontFace + delayRender; theme.font_family is real
 │       ├── theme.ts           ✓ # theme + orientation from injected props
 │       ├── types.ts           ✓ # mirrors schema.py, incl. cue_word
 │       ├── templates/
@@ -623,8 +631,23 @@ its `duration_ms`.
 
 Determinism obligations inside `remotion_engine/`:
 
-- Fonts bundled in `remotion_engine/fonts/` and loaded via `@remotion/fonts` from disk. A Google
-  Fonts fetch is both a network dependency at render time and a nondeterminism source.
+- Fonts bundled in **`remotion_engine/public/fonts/`** and registered by `src/fonts.ts` (`FontFace`
+  + `document.fonts.add`, wrapped in `delayRender`). A Google Fonts fetch — including
+  `@remotion/google-fonts` — is both a network dependency at render time and a nondeterminism
+  source, so the three OFL families are fetched **once** by `python -m python_pipeline.vendor_fonts`
+  and committed with a SHA-256 per file. Three details here were each learned the hard way:
+  - **`public/`, not the sibling `fonts/` this document originally specified.** With no
+    `@remotion/fonts` package installed, the only way to reach a local file from inside the bundle is
+    `staticFile()`, which resolves against `public/`. A font written anywhere else is a font the
+    renderer cannot open — and it fails *silently*, as a fallback family that still looks like text.
+  - **`delayRender` is load-bearing.** Remotion screenshots a frame as soon as React paints, so a
+    font that resolves milliseconds later would land in some frames and not others: an R3 failure
+    that presents as a rendering glitch rather than as a missing font.
+  - **`ensureFontsLoaded()` is called in the component body, not in an effect.** An effect runs after
+    React has committed, by which point frame 0 may already be captured with fallback typography.
+  For three phases `theme.font_family` was a config key that nothing read, and the failure was
+  invisible because a missing family degrades to readable fallback text instead of erroring. See
+  `ENGINEERING_LOG.md`.
 - `Math.random()`, `Date.now()`, `new Date()` and `performance.now()` are banned — add an ESLint
   rule so the ban is enforced, not aspirational. Every animation is a pure function of
   `useCurrentFrame()`.
@@ -738,6 +761,7 @@ flags:
 ./run --script … --explain-cache                                    # R8
 ./run --script … --no-cache | --cache-dir .cache2
 ./run --verify-determinism output/a.mp4 output/b.mp4                # R3
+./run --serve                                                       # dashboard (§13)
 ./run --help
 ```
 
@@ -874,6 +898,23 @@ does not over-read the 6/7: an emoji *labels* the topic where a swatch strip *is
 the strip encodes a value. Scene count and the amount of movement per scene are untouched by this
 phase — sub-scene beats are what would change those, and they are not built.
 
+**Phase 3.6 — typography and the dashboard. ✅ COMPLETE.** Two pieces, in that order because the
+second depends on the first being true.
+
+*Fonts.* `theme.font_family` was a config key nothing read. Three OFL variable families are now
+vendored to `remotion_engine/public/fonts/` and registered through `FontFace` inside `delayRender`
+(§6 Stage 6). Proven rather than assumed: three stills of Script A `scene_01` at frame 110 with
+`font_family` set to Inter / JetBrains Mono / Source Serif 4 produced **three distinct SHA-256s**
+(`da5a2909…`, `0ca0ca2e…`, `6004d829…`), and reading the PNGs confirms a neo-grotesque vs. real
+serifs. The control changes the frame, not just a string.
+
+*Dashboard.* `./run --serve` — a timeline page and a settings page (§13). Verified end to end
+against a live server: a `--dry-run` (rc=0, 7 scenes, spec+config+log downloadable), a `--spec`
+re-render (rc=0, 400 s, video 2.68 MB, 9/9 stages resolved), a full script run with per-run
+typography and palette overrides, 409 on a concurrent start, all four downloads serving with
+run-scoped filenames, and six invalid-setting cases rejected 422 with **nothing written**. Four
+parser and writer bugs were found by running it rather than by reading it; all four are logged.
+
 **Phase 4 — hardening. ☐ NOT STARTED.** Run on 3–4 self-written scripts on unrelated topics (one
 with no numbers at all, one with dates and percentages, one twice Script A's length). Fix what
 breaks. Then rehearse the live-review sequence: fresh clone → Script B → run twice → edit a spec
@@ -953,3 +994,114 @@ Engineering-log source material. Each item is a defect in the first draft, not a
 20. IR gaps vs R6: no `start_ms`/`duration_ms`, no `assets`, no `schema_version`, no provenance.
 21. Shell defects: `set -e` without `pipefail`; unknown-arg rejection broke `--help`; no
     `--config`/`--cache-dir`; output directory never created; `-safe 0` with Windows absolute paths.
+
+---
+
+## 13. The dashboard (`./run --serve`)
+
+A minimal two-page interface: a **timeline** of the workflow (the R6 artifact rendered as a picture)
+and a **settings** page for the surface R7 requires to be configurable. When a run finishes, the video,
+the scene spec, the config it used and the full engine log are all one click away.
+
+```
+./run --serve                       # http://127.0.0.1:8000
+python -m python_pipeline.server    # identical; the module is directly runnable
+```
+
+### FastAPI + vanilla HTML/JS, no build step
+
+One new Python dependency pair (`fastapi`, `uvicorn`), two static pages, no bundler, no second
+`node_modules`, no `dist/` that must be rebuilt before the tool works. A React dashboard would add a
+whole second dependency tree and a new way for a fresh clone to be broken — in service of two pages
+and a progress stream. The cost is manual DOM building, which `static/app.js` keeps honest with one
+`el()` factory. Both pages run offline.
+
+### The dashboard is a client of the CLI, not a second engine
+
+Every run shells out to `python -m python_pipeline.main` with ordinary flags. There is exactly one code
+path (R1), so the dashboard cannot drift from the command line — a class of bug that is otherwise
+guaranteed, because the UI path gets exercised far less than the command it duplicates. Three specific
+reasons it is a subprocess and not an in-process call:
+
+- A crash in a render would take the web server down with it — the page meant to *report* the failure
+  would die alongside it.
+- Intercepting `print()` means rebinding process-global `sys.stdout`, which breaks the moment two runs
+  overlap.
+- Every flag would need a second, parallel invocation path.
+
+### Progress is parsed from stdout, not reported by the pipeline
+
+The engine already prints `[engine] rendering scene_03 [BigNumber] 240 frames`. A structured progress
+channel would mean editing every stage to report itself, purely to serve the UI. Parsing is uglier but
+keeps the pipeline unaware a dashboard exists, and an unrecognised line still shows verbatim. The
+parser is best-effort by design: the worst outcome is a stage bar that does not advance while the raw
+log still scrolls.
+
+Two consequences worth stating, because both were bugs first:
+
+- **Stages are strictly ordered, so reaching stage N marks every earlier stage done.** Without this,
+  stages whose only log line is their completion (`evaluate`, `track`) would never leave `pending`.
+- **That back-fill is wrong when a stage was genuinely skipped**, so `--dry-run` (no audio/track/
+  render/mux) and `--spec` (no segment/annotate/assets) pre-mark those stages `skipped` *with a
+  reason*, and the reason replaces the stage's usual blurb. "keyword → vendored icon" is a lie on a run
+  that matched no keywords, and a dash with no explanation reads as a failure.
+
+A `--spec` re-render also never prints a scene list, so the timeline reads the input spec directly and
+is fully populated before the first frame renders — on a 400-second render, an empty timeline for the
+whole run is most of the experience.
+
+### Per-run config by default; `config.yaml` only on an explicit Save
+
+Edits build an override that is written to `.cache/runs/<id>/config.yaml` and passed with `--config`.
+Two consequences worth having: the committed `config.yaml` stays the reproducible default, so trying
+six palettes produces no git diff mid-review; and "which config produced this video" is answered by the
+file sitting next to the video. **Save to config.yaml** is a separate button that rewrites the real file.
+
+That save **patches the text of the scalar lines it changes** rather than `yaml.safe_dump`-ing the
+document, because the comments in `config.yaml` carry the reasoning behind every provider choice and a
+dump would strip all of them. The result is validated through `Config.model_validate` *before* writing —
+a `config.yaml` that no longer parses would break the CLI too, and the dashboard would be the thing
+that broke it. Measured: changing five settings produces a five-line diff with all 38 comments intact.
+
+### A control must not offer an option that would crash, or one that changes nothing
+
+Both are worse than omitting the control. The second is exactly what `theme.font_family` was for three
+phases. So availability is **probed** — by import, by key presence, by files on disk — never declared:
+
+- `piper` and `whisperx` are listed **disabled, with the reason** (`module is a stub`). A provider seam
+  is architecture worth showing even when one end is unbuilt.
+- A font that is not vendored is **omitted entirely**. A greyed-out typeface teaches nobody anything.
+- Probes re-run per request, so vendoring icons or dropping a key into `.env` changes the page on
+  reload without a restart.
+
+### Security posture, stated rather than implied
+
+`POST /api/run` starts a subprocess and `POST /api/config` rewrites `config.yaml`, so **this server is
+remote code execution by design**. That is fine on loopback on a developer's machine and indefensible
+anywhere else. Therefore:
+
+- The host default is `127.0.0.1`, and any other `--host` prints a warning.
+- There is no login, deliberately: a login would imply this is safe to expose, which it is not.
+- `GET /api/env` returns key **names** only — never a value, a prefix or a length. `load_env()` returns
+  names for exactly this reason, and a dashboard is a log with a browser attached.
+- Everything the UI can write is a small explicit whitelist (`settings.EDITABLE`), each field
+  type-coerced and range-clamped, with all errors collected so a form with two bad fields reports both.
+- `providers.renderer` is **not** settable: it selects a code path that shells out to `npx` and has
+  exactly one implementation, so a dropdown would be attack surface with no feature behind it.
+- Every insertion of engine-provided text goes through `textContent`, never `innerHTML`. A narration
+  script containing markup renders as characters.
+
+### Deliberate limits
+
+- **One run at a time** (409 otherwise). Two renders compete for CPU — Remotion already runs Chromium —
+  and for the same cache staging paths. A dashboard that lets you start six renders on a laptop is a
+  footgun disguised as a feature.
+- **Run history is in memory only.** A restart forgets the *list*, not the artifacts, which stay under
+  `.cache/runs/`. Persisting would mean a schema, a migration and a stale-PID problem for a feature
+  nobody asked for.
+- **Artifact existence is checked at request time**, so a run that failed after the spec but before the
+  video shows no video button rather than a dead one.
+- **The typography preview is browser-rendered**, using the same font files the engine loads. It shows
+  the real typeface, but it is not a frame grab — only a render proves the frame.
+- SSE polls a shared line list rather than using a per-subscriber queue, because two browser tabs on one
+  run is a real case and a queue would deliver each line to only one of them.

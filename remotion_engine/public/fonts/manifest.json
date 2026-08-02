@@ -1,0 +1,31 @@
+{
+  "fonts": {
+    "inter": {
+      "bytes": 876576,
+      "family": "Inter",
+      "file": "Inter[opsz,wght].ttf",
+      "license": "SIL Open Font License 1.1",
+      "note": "Neo-grotesque, designed for screens. The default.",
+      "sha256": "29160a80ff49ddcab2c97711247e08b1fab27a484a329ce8b813d820dc559031",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf"
+    },
+    "jetbrains_mono": {
+      "bytes": 187208,
+      "family": "JetBrains Mono",
+      "file": "JetBrainsMono[wght].ttf",
+      "license": "SIL Open Font License 1.1",
+      "note": "Monospaced. Digits are fixed-width by construction, so a counting animation cannot reflow the layout.",
+      "sha256": "48715a42ec242c21e9f02692891e147d022299a52e48d5e413e1a942193ffeda",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf"
+    },
+    "source_serif": {
+      "bytes": 1209508,
+      "family": "Source Serif 4",
+      "file": "SourceSerif4[opsz,wght].ttf",
+      "license": "SIL Open Font License 1.1",
+      "note": "Transitional serif. Reads as editorial rather than technical.",
+      "sha256": "97b2d4da6e3cb494b5a1e66ae176914d852ccabef49e0c02c0df25f3e39aca0b",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/sourceserif4/SourceSerif4%5Bopsz%2Cwght%5D.ttf"
+    }
+  }
+}
