@@ -1,0 +1,58 @@
+AI Video Production Assignment
+You are not being asked to make a video. You are being asked to build the machine that makes videos.
+We will hand your system a script it has never seen, on the day of your review, and watch it produce a finished explainer video. Script A below is your development target. Script B is withheld.
+1. The Task
+Build a pipeline that takes a plain-text narration script as input and produces a finished, narrated explainer video as output — with no human in the loop between those two points.
+The reference input is Script A (Appendix A), a two-minute explainer titled “How Computers See Color.” Your system must design the visual narrative itself, from the words alone. It must then do the same for a script on an entirely different subject, without you touching the code.
+2. Hard Requirements
+These are pass/fail. A beautiful video that misses these scores below a plain one that meets them.
+R1 — One command, no timeline
+The pipeline runs from a single entry point that takes a script file and emits a video file. Something equivalent to: $ ./run --script scripts/script_b.txt --out output/script_b.mp4
+No manual editing in a GUI editor. No dragging clips. No hand-placing captions. If a human has to open a timeline to finish the video, the pipeline is incomplete.
+R2 — Generalisation to an unseen script
+At review, we will give you Script B: a different topic, a different length, a different structure. You will run your pipeline on it live, in front of us. You may not edit code, prompts or config between receiving Script B and running it.
+Design accordingly. Anything hard-coded to apples, pixels or the number 256 will fail visibly.
+R3 — Determinism
+Running the same script twice must produce the same video. Where a component is inherently non-deterministic, you must seed it, cache it, or otherwise pin it — and explain in your log exactly which components those were and how you constrained them.
+We will run your pipeline twice on Script B and compare.
+R4 — On-screen values are computed, not authored
+Where the narration states a value, that value must appear on screen, correct and legible — and it must be derived by your system from the script or its parameters, not typed into a template by you and not produced by an image model.
+In Script A this includes 2⁸ = 256, the range 0–255, the triplet (255, 0, 0), and 256 × 256 × 256 = 16,777,216. Script B will contain its own numbers, terms and relationships. Text and figures rendered on screen must be exactly right — no mangled digits, no approximations, no smudged glyphs.
+R5 — Automatic narration synchronisation
+Visual events must be aligned to the narration at word level, within ±150 ms of the spoken word they illustrate. This alignment must be produced by the system, not measured by you with a stopwatch and pasted into a config file.
+Expect us to scrub to a specific word in Script B and check what is on screen.
+R6 — An inspectable intermediate representation
+Between the raw script and the rendered pixels there must be a human-readable artifact — a scene specification — that describes the planned video: segments, timings, visual elements, on-screen text, transitions, asset references.
+This artifact must be editable. If we change a value in it and re-run only the render stage, the video must change correspondingly. Submit the scene spec your pipeline generated for Script A alongside your video.
+R7 — Swappable components
+Voice synthesis, visual asset generation and rendering must sit behind interfaces and be selectable through configuration. Swapping the voice provider, or the renderer, should be a config change — not a rewrite.
+Output resolution, aspect ratio (16:9 and 9:16 both), colour palette and typography must likewise be configuration, not code.
+R8 — Incremental re-rendering
+Changing one segment of the script must not force a full regeneration of narration and visuals for the whole video. Show us the cache or dependency mechanism that makes this true, and demonstrate it.
+3. What to Submit
+A. The repository
+• Source code, with a README that gets us from clone to rendered video on a clean machine.
+• Configuration files, and the scene specification generated for Script A.
+B. The video
+• Script A rendered end to end, as an unlisted link.
+• 480p is acceptable. Legibility matters; polish does not.
+C. The engineering log
+This is weighted heavily. It is not a summary of what you built — it is the record of how you decided.
+• Tool evaluation. For each major stage, the options you considered and the axes you judged them on — text fidelity, timing control, determinism, render cost, runtime, licensing, ease of automation. Name what you rejected and why. A single-line “I used X” is not an evaluation.
+• Architecture rationale. Why the pipeline is split the way it is, and what the scene specification schema looks like and why.
+• Dead ends. At least two approaches that failed. For each: what you expected, what actually happened, your hypothesis for the cause, what you tried next, and what finally worked. Vague failures (“the output looked bad”) score nothing; specific ones (“the renderer dropped frames above 30 fps because …”) score well.
+• Cost and runtime model. Marginal cost and wall-clock time per minute of finished video, broken down by stage. What would break first at 100 videos a week.
+• Known limits. Script structures your pipeline would handle badly, and what you would build next.
+D. The live review
+A 45-minute session. You run the pipeline on Script B while we watch, then walk us through the code. Come prepared to defend your architectural choices and to explain any part of the system on demand.
+Submission deadline: [3 days from the date you received the assignment]
+Appendix A — Script A
+How Computers See Color
+When you look at an apple, you see red. A computer, however, only understands numbers. To bridge this gap between our colorful reality and a machine’s mathematical brain, we break images down into tiny, illuminated building blocks called pixels.
+How does a pixel know what color to be? It uses the RGB color model, which mimics the biology of human vision. Every pixel contains three sub-pixels: Red, Green, and Blue. By mixing different intensities of these three lights, screens can trick your brain into seeing almost any color imaginable.
+To precisely measure the intensity of each sub-pixel, computers use a system called bit depth. Standard color imaging uses an 8-bit system for each of the three channels. Mathematically, this means two to the eighth power, resulting in 256 possible combinations per channel. Because a computer starts counting at zero, this gives us a range from 0 to 255. Zero means the light is completely off, and 255 means the light is at maximum brightness.
+These values act as mathematical coordinates for color. Pure red is (255, 0, 0). If you turn all the lights off to (0, 0, 0), you get pitch black. Turn them all the way up to 255, and you get a blinding white.
+To find the total number of colors a standard monitor can display, we multiply the 256 levels of each channel together. 256 times 256 times 256 equals 16,777,216. That is nearly 16.8 million unique colors, with every single one mapped to a specific mathematical coordinate.
+The next time you look at a stunning digital photograph, remember what you are really seeing. You aren’t seeing the sunset. You are seeing millions of microscopic lights, executing billions of mathematical calculations every second, perfectly orchestrated to replicate the beauty of the real world.
+Appendix B — Script B
+Withheld until the live review.

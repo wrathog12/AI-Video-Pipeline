@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Node / Remotion
+node_modules/
+remotion_engine/out/
+
+# Generated artifacts.
+# The cache directory structure is tracked (via .gitkeep) but its contents are not:
+# cache entries are content-addressed derivatives, reproducible from the inputs.
+.cache/**
+!.cache/**/.gitkeep
+
+output/**
+!output/.gitkeep
+
+# Exception: the scene spec generated for Script A is a required submission artifact (R6).
+!output/script_a.spec.json
+
+# Bundled fonts are committed deliberately — render-time font fetching is both a
+# network dependency and a determinism hazard (see context.md, Stage 6).
+!remotion_engine/fonts/**
+
+# Secrets
+.env
+.env.*
+!.env.example
