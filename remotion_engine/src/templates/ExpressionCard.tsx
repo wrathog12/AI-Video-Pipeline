@@ -15,6 +15,7 @@ import React from 'react';
 import {interpolate, useCurrentFrame, useVideoConfig} from 'remotion';
 
 import {useMetrics, rootStyle} from '../theme';
+import {SceneIcon} from '../components/SceneIcon';
 import {ValueBlock, triggerFor} from '../components/ValueBlock';
 import {useCueProgress} from '../components/WordCue';
 import type {SceneProps, Value} from '../types';
@@ -31,6 +32,7 @@ export const ExpressionCard: React.FC<SceneProps> = ({
 	orientation,
 	output_scale,
 	word_triggers,
+	assets,
 }) => {
 	const m = useMetrics(theme, orientation, output_scale);
 	const frame = useCurrentFrame();
@@ -61,6 +63,7 @@ export const ExpressionCard: React.FC<SceneProps> = ({
 				gap: m.space(4),
 			}}
 		>
+			<SceneIcon assets={assets} triggers={word_triggers} m={m} size={12} />
 			{p.title ? (
 				<div
 					style={{

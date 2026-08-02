@@ -289,6 +289,21 @@ class Resolution:
     format: str
     resolved: str
     computed: bool       # True = Python computed it; False = literal text
+    error: str | None = None   # set when the value was dropped instead of resolved
+
+
+# Returned in place of a Value that could not be resolved. The parent dict/list
+# omits it, so an unresolvable value leaves the IR entirely rather than reaching a
+# template with an empty `resolved` — a blank box on screen reads as a rendering
+# bug, whereas an absent one reads as "this scene has less to show".
+class _Drop:
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return "<dropped value>"
+
+
+_DROP = _Drop()
 
 
 # Keys that make a dict recognisable as a Value. `resolved` alone is not enough:
@@ -320,10 +335,21 @@ def resolve_props(props: Any, *, path: str = "") -> tuple[Any, list[Resolution]]
     for non-numeric text quoted from the script ("0-255", "RGB"). Such a value is
     flagged `computed=False`, and rejected outright if it looks like a bare
     number, because an authored number is exactly what R4 forbids.
+
+    An unresolvable value is **dropped**, not fatal. R2 says an unseen script must
+    still produce a video, and a model that writes one algebraic expression —
+    `P * (1.07)**N`, with free variables the whitelist rightly refuses — should
+    cost that one value, not the whole run. The failure is recorded on the
+    Resolution so the run log names it; it is never swallowed.
     """
     if _looks_like_value(props):
         value = Value.model_validate(props)
-        record, resolved = _resolve_one(value, path)
+        try:
+            record, resolved = _resolve_one(value, path)
+        except EvaluationError as exc:
+            return _DROP, [
+                Resolution(path, value.label, value.expr, value.format, "", False, str(exc))
+            ]
         return resolved.model_dump(), [record]
 
     if isinstance(props, dict):
@@ -331,7 +357,8 @@ def resolve_props(props: Any, *, path: str = "") -> tuple[Any, list[Resolution]]
         records: list[Resolution] = []
         for key, val in props.items():
             child, child_records = resolve_props(val, path=f"{path}.{key}" if path else key)
-            out[key] = child
+            if not isinstance(child, _Drop):
+                out[key] = child
             records.extend(child_records)
         return out, records
 
@@ -340,11 +367,34 @@ def resolve_props(props: Any, *, path: str = "") -> tuple[Any, list[Resolution]]
         list_records: list[Resolution] = []
         for i, val in enumerate(props):
             child, child_records = resolve_props(val, path=f"{path}[{i}]")
-            out_list.append(child)
+            if not isinstance(child, _Drop):
+                out_list.append(child)
             list_records.extend(child_records)
         return out_list, list_records
 
     return props, []
+
+
+def channels_of(computed: Any) -> list[float]:
+    """Numeric components of a tuple result, for components that draw values.
+
+    Preserves the structure the evaluator already computed so that a swatch or a
+    bar never has to parse it back out of the display string. Returns [] for
+    anything that is not a tuple of finite numbers — a partially-numeric tuple is
+    not something a renderer can draw, so it degrades to "no channels" rather
+    than to a half-filled list.
+    """
+    if not isinstance(computed, tuple):
+        return []
+    out: list[float] = []
+    for item in computed:
+        if isinstance(item, bool) or not isinstance(item, (int, float)):
+            return []
+        v = float(item)
+        if v != v or v in (float("inf"), float("-inf")):
+            return []
+        out.append(v)
+    return out
 
 
 def _resolve_one(value: Value, path: str) -> tuple[Resolution, Value]:
@@ -353,7 +403,9 @@ def _resolve_one(value: Value, path: str) -> tuple[Resolution, Value]:
         text = format_value(computed, value.format)
         return (
             Resolution(path, value.label, value.expr, value.format, text, True),
-            value.model_copy(update={"resolved": text}),
+            value.model_copy(
+                update={"resolved": text, "channels": channels_of(computed)}
+            ),
         )
 
     literal = (value.resolved or "").strip()
@@ -374,14 +426,38 @@ def _resolve_one(value: Value, path: str) -> tuple[Resolution, Value]:
     )
 
 
-def resolve_scene_spec(spec: Any) -> list[Resolution]:
-    """Resolve every scene's props in place. Returns all resolutions."""
+# Templates whose whole point is a value. If dropping unresolvable values leaves
+# one of these with nothing quantitative, it is downgraded — a BigNumber with no
+# number is a title floating in empty space, which looks like a broken render.
+_VALUE_LED = {"BigNumber", "ExpressionCard", "KeyValuePanel", "ComparisonGrid"}
+
+
+def resolve_scene_spec(spec: Any) -> tuple[list[Resolution], list[str]]:
+    """Resolve every scene's props in place.
+
+    Returns (resolutions, warnings). Warnings name each dropped value and each
+    scene downgraded because dropping left it empty, so a run that silently lost
+    half its numbers is not possible: the log says so.
+    """
     records: list[Resolution] = []
+    warnings: list[str] = []
     for scene in spec.scenes:
         props, scene_records = resolve_props(scene.props, path=scene.scene_id)
         scene.props = props
         records.extend(scene_records)
-    return records
+
+        for rec in scene_records:
+            if rec.error:
+                warnings.append(f"{rec.path} ({rec.label!r}) dropped: {rec.error}")
+
+        if scene.template_name in _VALUE_LED and not (
+            props.get("expression") or props.get("items")
+        ):
+            warnings.append(
+                f"{scene.scene_id}: {scene.template_name} lost every value; using Fallback"
+            )
+            scene.template_name = "Fallback"
+    return records, warnings
 
 
 def render_resolutions(records: list[Resolution]) -> str:
@@ -392,7 +468,15 @@ def render_resolutions(records: list[Resolution]) -> str:
     lines = [f"{'PATH'.ljust(width)}  SOURCE      RESOLVED"]
     for r in records:
         source = (r.expr or "(literal)")[:24]
-        lines.append(f"{r.path.ljust(width)}  {source.ljust(24)}  {r.resolved}")
-    computed = sum(1 for r in records if r.computed)
-    lines.append(f"\n{len(records)} values, {computed} computed from expressions")
+        # ASCII marker on purpose: this table goes to a Windows console, where a
+        # cp1252 codepage turns an em-dash into a replacement char.
+        shown = r.resolved if not r.error else f"DROPPED: {r.error[:60]}"
+        lines.append(f"{r.path.ljust(width)}  {source.ljust(24)}  {shown}")
+    ok = [r for r in records if not r.error]
+    computed = sum(1 for r in ok if r.computed)
+    dropped = len(records) - len(ok)
+    tail = f"\n{len(ok)} values, {computed} computed from expressions"
+    if dropped:
+        tail += f", {dropped} dropped"
+    lines.append(tail)
     return "\n".join(lines)

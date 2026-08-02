@@ -54,6 +54,16 @@ class Value(Strict):
     # against the transcript mis-fires whenever the spoken form differs from the
     # displayed form ("sixteen point eight million" vs "16,777,216").
     cue_word: str | None = None
+    # Numeric components of a tuple-valued result, filled by the evaluator — NOT
+    # by the annotator, and never parsed out of `resolved` by a template.
+    #
+    # The evaluator already computes `(255, 0, 0)` as a real Python tuple and then
+    # formats it to a string. Discarding the structure would force any component
+    # that wants to *draw* the value (a colour swatch, a bar) to parse the display
+    # string back into numbers — arithmetic in the renderer, which is precisely
+    # the R4 boundary violation the expr/resolved split exists to prevent. So the
+    # structure is preserved here instead. Empty for non-tuple values.
+    channels: list[float] = Field(default_factory=list)
 
 
 class WordTrigger(Strict):
@@ -67,7 +77,15 @@ class WordTrigger(Strict):
 class AssetRef(Strict):
     kind: Literal["svg", "image", "none"] = "none"
     id: str = ""
+    # Renderer-relative path, resolved with Remotion's staticFile(). Never
+    # absolute: an absolute path bakes this machine's directory layout into the
+    # IR, and the spec is meant to be re-renderable elsewhere.
     path: str | None = None
+    # The narration word that selected this asset, spelled as the narration spells
+    # it — so it can match a word trigger and be revealed as it is spoken (R5).
+    # Normalising it here would produce a cue no trigger contains, and a missed
+    # cue shows immediately rather than failing, so it would silently un-sync.
+    cue_word: str | None = None
 
 
 class DerivedFrom(Strict):
@@ -122,6 +140,10 @@ class Provenance(Strict):
     height: int = 1080
     output_scale: float = 1.0
     theme_sha256: str = ""
+    # Digest of the renderer's own sources. Two runs with identical props but
+    # different engine_sha256 are expected to differ visually — which is exactly
+    # what someone comparing an old spec against a new render needs to know.
+    engine_sha256: str = ""
     chromium_version: str = ""
     # Deliberately NOT a wall-clock default: a timestamp baked in at model
     # construction would change on every run and defeat spec comparison.

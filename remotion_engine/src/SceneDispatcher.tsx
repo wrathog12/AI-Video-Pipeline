@@ -10,6 +10,7 @@
 import React from 'react';
 
 import {BigNumber} from './templates/BigNumber';
+import {ComparisonGrid} from './templates/ComparisonGrid';
 import {ExpressionCard} from './templates/ExpressionCard';
 import {Fallback} from './templates/Fallback';
 import {KeyValuePanel} from './templates/KeyValuePanel';
@@ -24,15 +25,17 @@ import type {SceneProps, TemplateName} from './types';
  * downgraded to Fallback there — so a mismatch shows up as a Python-side warning
  * rather than as a silently generic scene.
  *
- * ComparisonGrid is intentionally absent: the flat annotation contract has no
- * notion of columns, so a grid would have to invent structure the annotator
- * never described.
+ * ComparisonGrid is now included, but not as the table the original spec
+ * described — the flat contract still has no notion of columns. It renders the
+ * flat `items[]` as proportional bars, which needs no new annotation shape. See
+ * its own docstring for why bars are the better reading of a comparison anyway.
  */
 const REGISTRY: Partial<Record<TemplateName, React.FC<SceneProps>>> = {
 	TitleCard,
 	KeyValuePanel,
 	ExpressionCard,
 	BigNumber,
+	ComparisonGrid,
 	ProcessSteps,
 	Fallback,
 };
@@ -68,6 +71,7 @@ export const SceneDispatcher: React.FC<Partial<SceneProps>> = (raw) => {
 		template_name: raw.template_name ?? 'Fallback',
 		narration_text: raw.narration_text ?? '',
 		props: raw.props ?? {},
+		assets: raw.assets ?? [],
 		word_triggers: raw.word_triggers ?? [],
 		theme: {...DEFAULT_THEME, ...(raw.theme ?? {})},
 		orientation: raw.orientation ?? 'landscape',

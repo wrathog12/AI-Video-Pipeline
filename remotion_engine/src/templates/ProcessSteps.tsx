@@ -13,6 +13,7 @@
 import React from 'react';
 import {interpolate, useCurrentFrame, useVideoConfig} from 'remotion';
 
+import {SceneIcon} from '../components/SceneIcon';
 import {useMetrics, rootStyle} from '../theme';
 import type {SceneProps} from '../types';
 
@@ -31,6 +32,8 @@ export const ProcessSteps: React.FC<SceneProps> = ({
 	theme,
 	orientation,
 	output_scale,
+	assets,
+	word_triggers,
 }) => {
 	const m = useMetrics(theme, orientation, output_scale);
 	const frame = useCurrentFrame();
@@ -57,6 +60,7 @@ export const ProcessSteps: React.FC<SceneProps> = ({
 				gap: m.space(3),
 			}}
 		>
+			<SceneIcon assets={assets} triggers={word_triggers} m={m} size={11} />
 			{p.title ? (
 				<div
 					style={{

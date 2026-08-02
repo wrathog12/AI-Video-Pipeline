@@ -8,11 +8,18 @@
  * portrait canvas is wider than the frame. Rather than let it clip (an R4
  * failure — a mangled number), the size is scaled down by character count. The
  * arithmetic is on the *layout*, never on the value.
+ *
+ * The figure counts up as it is narrated (see CountUp), because this template's
+ * whole job is one number and a static hero figure wastes the ~20 s it holds for.
+ * CountUp settles on `resolved` verbatim, so the number that rests on screen is
+ * still exactly what Python computed.
  */
 
 import React from 'react';
 import {interpolate, useCurrentFrame, useVideoConfig} from 'remotion';
 
+import {CountUp} from '../components/CountUp';
+import {SceneIcon} from '../components/SceneIcon';
 import {triggerFor} from '../components/ValueBlock';
 import {useCueProgress} from '../components/WordCue';
 import {useMetrics, rootStyle} from '../theme';
@@ -37,6 +44,7 @@ export const BigNumber: React.FC<SceneProps> = ({
 	orientation,
 	output_scale,
 	word_triggers,
+	assets,
 }) => {
 	const m = useMetrics(theme, orientation, output_scale);
 	const frame = useCurrentFrame();
@@ -50,7 +58,8 @@ export const BigNumber: React.FC<SceneProps> = ({
 
 	const expression = p.expression;
 	const shown = expression?.resolved ?? '—';
-	const progress = useCueProgress(triggerFor(expression, word_triggers), {durationMs: 500});
+	const trigger = triggerFor(expression, word_triggers);
+	const progress = useCueProgress(trigger, {durationMs: 500});
 
 	return (
 		<div
@@ -62,6 +71,10 @@ export const BigNumber: React.FC<SceneProps> = ({
 				gap: m.space(2.5),
 			}}
 		>
+			{/* Kept small here specifically: the hero figure is the widest element in
+			    the project and fitFactor already shrinks it to fit, so the icon must
+			    not crowd the row it might grow into. */}
+			<SceneIcon assets={assets} triggers={word_triggers} m={m} size={11} />
 			{p.title ? (
 				<div
 					style={{
@@ -90,20 +103,32 @@ export const BigNumber: React.FC<SceneProps> = ({
 					maxWidth: '100%',
 				}}
 			>
-				<span
+				{/* fitFactor is measured against the FINAL string, not the current
+				    count value, so the size is constant while counting. Sizing per
+				    frame would make the figure visibly grow as digits accumulate. */}
+				<div
 					style={{
-						fontSize: m.fontSize('hero') * fitFactor(shown, m.isPortrait),
-						fontWeight: 800,
-						lineHeight: 1,
-						letterSpacing: '-0.02em',
-						color: theme.primary_color,
-						opacity: progress,
 						transform: `translateY(${(1 - progress) * 1.6}vmin)`,
 						whiteSpace: 'nowrap',
+						letterSpacing: '-0.02em',
+						fontSize: m.fontSize('hero') * fitFactor(shown, m.isPortrait),
 					}}
 				>
-					{shown}
-				</span>
+					{expression ? (
+						<CountUp
+							value={expression}
+							trigger={trigger}
+							theme={theme}
+							m={m}
+							size="hero"
+							// Match the container so fitFactor governs; CountUp's own size
+							// step would otherwise re-introduce the overflow this guards.
+							style={{fontSize: 'inherit'}}
+						/>
+					) : (
+						<span style={{color: theme.primary_color, fontWeight: 800}}>—</span>
+					)}
+				</div>
 				{expression?.unit ? (
 					<span
 						style={{

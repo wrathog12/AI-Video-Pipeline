@@ -9,6 +9,7 @@
 import React from 'react';
 import {interpolate, useCurrentFrame, useVideoConfig} from 'remotion';
 
+import {SceneIcon} from '../components/SceneIcon';
 import {useMetrics, rootStyle} from '../theme';
 import type {SceneProps} from '../types';
 
@@ -23,6 +24,8 @@ export const TitleCard: React.FC<SceneProps> = ({
 	theme,
 	orientation,
 	output_scale,
+	assets,
+	word_triggers,
 }) => {
 	const m = useMetrics(theme, orientation, output_scale);
 	const frame = useCurrentFrame();
@@ -52,6 +55,7 @@ export const TitleCard: React.FC<SceneProps> = ({
 				gap: m.space(3),
 			}}
 		>
+			<SceneIcon assets={assets} triggers={word_triggers} m={m} size={15} />
 			<div
 				style={{
 					height: Math.max(3, m.space(0.6)),

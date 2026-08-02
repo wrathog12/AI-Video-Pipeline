@@ -1,0 +1,602 @@
+{
+  "icons": {
+    "abacus": {
+      "bytes": 7666,
+      "codepoint": "1f9ee",
+      "file": "abacus.svg",
+      "keywords": [
+        "abacus",
+        "count",
+        "counting",
+        "arithmetic"
+      ],
+      "sha256": "efbbebeff1caafdead3ba4a833b4ea2c56b4735af2f19321aea95584ca35cb42"
+    },
+    "apple": {
+      "bytes": 2122,
+      "codepoint": "1f34e",
+      "file": "apple.svg",
+      "keywords": [
+        "apple",
+        "fruit"
+      ],
+      "sha256": "b74174d580462c259f2fb0cdceeb3734203cca15f669c5d9c18fc9f2336586a4"
+    },
+    "artist_palette": {
+      "bytes": 4808,
+      "codepoint": "1f3a8",
+      "file": "artist_palette.svg",
+      "keywords": [
+        "palette",
+        "paint",
+        "painting",
+        "artist"
+      ],
+      "sha256": "89ae84aac36991e11404f638c55bbcd2a7efe0e0efbc3c4ca46e1e11e6ba8c62"
+    },
+    "balance_scale": {
+      "bytes": 5632,
+      "codepoint": "2696",
+      "file": "balance_scale.svg",
+      "keywords": [
+        "scale",
+        "balance",
+        "weigh",
+        "tradeoff"
+      ],
+      "sha256": "bb5038b3b20a838aa609d8f3bd17cf91050bdfdd7c8041e65a1f4a6040e386d8"
+    },
+    "bank": {
+      "bytes": 3944,
+      "codepoint": "1f3e6",
+      "file": "bank.svg",
+      "keywords": [
+        "bank",
+        "banking",
+        "deposit",
+        "account"
+      ],
+      "sha256": "bb77e0e22d56d3dee7fcdd38246e5829c1005ae9ae15b4fcbd70e3e3448acf53"
+    },
+    "bar_chart": {
+      "bytes": 1673,
+      "codepoint": "1f4ca",
+      "file": "bar_chart.svg",
+      "keywords": [
+        "chart",
+        "graph",
+        "statistic",
+        "comparison"
+      ],
+      "sha256": "d8d539afef021684f2ec56b0ddd40c1a363c699ed883fac9179b05858f312e4d"
+    },
+    "battery": {
+      "bytes": 2827,
+      "codepoint": "1f50b",
+      "file": "battery.svg",
+      "keywords": [
+        "battery",
+        "recharge"
+      ],
+      "sha256": "91208eced24e0ef97ecc6e9d9a5749fe2b051ea46bd1f5e021ade2d4d8b56281"
+    },
+    "books": {
+      "bytes": 5424,
+      "codepoint": "1f4da",
+      "file": "books.svg",
+      "keywords": [
+        "book",
+        "library",
+        "encyclopedia"
+      ],
+      "sha256": "35a1f48870a0b4bc2dabac1b22500a82488073c437b73e5905b1472f9fe3d6e8"
+    },
+    "brain": {
+      "bytes": 11082,
+      "codepoint": "1f9e0",
+      "file": "brain.svg",
+      "keywords": [
+        "brain",
+        "mind",
+        "memory",
+        "neuron"
+      ],
+      "sha256": "77a7f330447c590c0b16d6b78553bb58e8d04d08570af77fbbd43c31d0fc54df"
+    },
+    "brick": {
+      "bytes": 9361,
+      "codepoint": "1f9f1",
+      "file": "brick.svg",
+      "keywords": [
+        "brick",
+        "block",
+        "building"
+      ],
+      "sha256": "aab2d46f364b36bdc358ea9a69c423c0428bbfa349925388036027e723d94e8c"
+    },
+    "calendar": {
+      "bytes": 2352,
+      "codepoint": "1f4c5",
+      "file": "calendar.svg",
+      "keywords": [
+        "calendar",
+        "year",
+        "decade",
+        "century"
+      ],
+      "sha256": "be2d062f483768d0199fe9e93680872281984eb3f302fd3cada1b246f59a5e4e"
+    },
+    "camera": {
+      "bytes": 4331,
+      "codepoint": "1f4f7",
+      "file": "camera.svg",
+      "keywords": [
+        "camera",
+        "photo",
+        "photograph"
+      ],
+      "sha256": "7e0572c943b5a8d2b1e11ecebda3521f40dd37ae10578a9d9d59a8e5945a6895"
+    },
+    "chart_decreasing": {
+      "bytes": 2009,
+      "codepoint": "1f4c9",
+      "file": "chart_decreasing.svg",
+      "keywords": [
+        "decrease",
+        "decline",
+        "declining",
+        "shrink"
+      ],
+      "sha256": "979e90a4d5072c7351f7060d67968c207adbc3788b0fc3ae3956cc90946b37a0"
+    },
+    "chart_increasing": {
+      "bytes": 1974,
+      "codepoint": "1f4c8",
+      "file": "chart_increasing.svg",
+      "keywords": [
+        "growth",
+        "grow",
+        "growing",
+        "increase",
+        "rising",
+        "compound",
+        "interest",
+        "profit"
+      ],
+      "sha256": "8db1bf08b9b98f025b6be0e0cefe7f650753aab7800965e51fd02f3f429e6844"
+    },
+    "check_mark": {
+      "bytes": 1304,
+      "codepoint": "2705",
+      "file": "check_mark.svg",
+      "keywords": [
+        "correct",
+        "valid",
+        "verified"
+      ],
+      "sha256": "10d5be93c52a1fc0bcd195dee9485445daeb9f2398f9f58e513e3c27f95a52d0"
+    },
+    "chequered_flag": {
+      "bytes": 4942,
+      "codepoint": "1f3c1",
+      "file": "chequered_flag.svg",
+      "keywords": [
+        "finish",
+        "conclusion"
+      ],
+      "sha256": "127643a146f73cee9d2d8cec69e8cbc48080900067ea1539e56610c37fe22457"
+    },
+    "clock": {
+      "bytes": 4008,
+      "codepoint": "1f552",
+      "file": "clock.svg",
+      "keywords": [
+        "clock",
+        "hour",
+        "minute",
+        "oclock"
+      ],
+      "sha256": "7188353c72b3129b68414a69305d0aa446ca37febfbf3c125122346a082be339"
+    },
+    "coin": {
+      "bytes": 12403,
+      "codepoint": "1fa99",
+      "file": "coin.svg",
+      "keywords": [
+        "coin",
+        "cent",
+        "penny",
+        "principal"
+      ],
+      "sha256": "568f839e5b78fe14c09fce74eca1f6c024cee39c72afe20a80f0f5fec39d8ba7"
+    },
+    "credit_card": {
+      "bytes": 1584,
+      "codepoint": "1f4b3",
+      "file": "credit_card.svg",
+      "keywords": [
+        "credit",
+        "debit"
+      ],
+      "sha256": "87d31086ceabdb60fe21ad0f8c85d7f49bb02a3e74e17950b7b01151b91d22d6"
+    },
+    "cross_mark": {
+      "bytes": 2084,
+      "codepoint": "274c",
+      "file": "cross_mark.svg",
+      "keywords": [
+        "incorrect",
+        "invalid",
+        "mistake"
+      ],
+      "sha256": "0ccbebbd79d7244d142eff2838125e21c8100d51bbb29a0ad17ee7ca7fdc0c3c"
+    },
+    "deciduous_tree": {
+      "bytes": 2071,
+      "codepoint": "1f333",
+      "file": "deciduous_tree.svg",
+      "keywords": [
+        "tree",
+        "forest"
+      ],
+      "sha256": "9e1a171b2d64100143265e7df251f4f74d598d84f904e807a7f02f1bb837ef8b"
+    },
+    "desktop": {
+      "bytes": 5748,
+      "codepoint": "1f5a5",
+      "file": "desktop.svg",
+      "keywords": [
+        "computer",
+        "monitor",
+        "screen",
+        "desktop"
+      ],
+      "sha256": "874d9c776bc7629f533cd5756b592ca3f6df1a8e1e9c5ee5c31cb38ed7362f82"
+    },
+    "dollar_banknote": {
+      "bytes": 15829,
+      "codepoint": "1f4b5",
+      "file": "dollar_banknote.svg",
+      "keywords": [
+        "dollar",
+        "banknote",
+        "bill"
+      ],
+      "sha256": "10862742894a70b2b5684bfb483a79666a45b524a8124861c3987e0d10d32291"
+    },
+    "droplet": {
+      "bytes": 852,
+      "codepoint": "1f4a7",
+      "file": "droplet.svg",
+      "keywords": [
+        "water",
+        "droplet",
+        "liquid"
+      ],
+      "sha256": "d4751fed323d453bc85a3366c01f1a0bf0f5ca5260bf48e6eb4b150c2af86dfa"
+    },
+    "eye": {
+      "bytes": 1961,
+      "codepoint": "1f441",
+      "file": "eye.svg",
+      "keywords": [
+        "eye",
+        "vision",
+        "eyesight",
+        "retina"
+      ],
+      "sha256": "f34e7437e0dde058ffbe585ffc574842eaa472898b16bc8c6ee6b66d28b0e77d"
+    },
+    "fire": {
+      "bytes": 2502,
+      "codepoint": "1f525",
+      "file": "fire.svg",
+      "keywords": [
+        "fire",
+        "flame",
+        "burning",
+        "heat"
+      ],
+      "sha256": "dbea451b6cba787df0bb9bc84ceec1bed96e499e8b876b80682ce323f83b1a1b"
+    },
+    "gear": {
+      "bytes": 2926,
+      "codepoint": "2699",
+      "file": "gear.svg",
+      "keywords": [
+        "gear",
+        "mechanism",
+        "machinery",
+        "machine"
+      ],
+      "sha256": "9055592dabd241ea44695b16cc27e092fbbf12e5307d6814a0054e8fe9840dcf"
+    },
+    "globe": {
+      "bytes": 14219,
+      "codepoint": "1f30d",
+      "file": "globe.svg",
+      "keywords": [
+        "earth",
+        "world",
+        "globe",
+        "planet"
+      ],
+      "sha256": "873feb50c7ac2bc1bd22e473de017be0c3c76662def7df423d0cfff0fc3f44b7"
+    },
+    "hourglass": {
+      "bytes": 2761,
+      "codepoint": "23f3",
+      "file": "hourglass.svg",
+      "keywords": [
+        "hourglass",
+        "patience",
+        "waiting"
+      ],
+      "sha256": "7407beaa57a12e4dab66bc8d67fc4d04f8cc6940a9852677298da2446e3c139c"
+    },
+    "key": {
+      "bytes": 2333,
+      "codepoint": "1f511",
+      "file": "key.svg",
+      "keywords": [
+        "key",
+        "unlock"
+      ],
+      "sha256": "b46b78a164f2f121e1afab7cdcaf17cbd6ee068b9b04ad2b3b06459da239f33a"
+    },
+    "light_bulb": {
+      "bytes": 4621,
+      "codepoint": "1f4a1",
+      "file": "light_bulb.svg",
+      "keywords": [
+        "bulb",
+        "lightbulb",
+        "lamp"
+      ],
+      "sha256": "4c3d9c210c03271ebe63b9f86ab3e9a33d36483ed5920e116d7efed6c095def7"
+    },
+    "lock": {
+      "bytes": 2449,
+      "codepoint": "1f512",
+      "file": "lock.svg",
+      "keywords": [
+        "lock",
+        "locked",
+        "encrypted",
+        "security"
+      ],
+      "sha256": "953a5dce94ecf72594a97c2ad2ccbf4afbec2d54361b6fe228ee73081b0bbaa9"
+    },
+    "magnifier": {
+      "bytes": 3257,
+      "codepoint": "1f50d",
+      "file": "magnifier.svg",
+      "keywords": [
+        "magnify",
+        "magnifier",
+        "magnified",
+        "zoom"
+      ],
+      "sha256": "298c6b6c93d56ae301efebd909ccfe0b991510667d2068adab4d68ee4c296a30"
+    },
+    "microscope": {
+      "bytes": 4912,
+      "codepoint": "1f52c",
+      "file": "microscope.svg",
+      "keywords": [
+        "microscope",
+        "microscopic"
+      ],
+      "sha256": "48106fe19680cdfb18c7fadbec44a1033322a0ffa14954ea4e302ad6ea83403c"
+    },
+    "mobile_phone": {
+      "bytes": 4670,
+      "codepoint": "1f4f1",
+      "file": "mobile_phone.svg",
+      "keywords": [
+        "phone",
+        "smartphone"
+      ],
+      "sha256": "e363c1e6e9fa46e8064892468a5d188d4651f14dce222cd32798dd6621ba8840"
+    },
+    "money_bag": {
+      "bytes": 22985,
+      "codepoint": "1f4b0",
+      "file": "money_bag.svg",
+      "keywords": [
+        "money",
+        "cash",
+        "wealth",
+        "saving",
+        "fund"
+      ],
+      "sha256": "75b9bbdcac486261435af6d77b599e43265c8dcd017be9bfb704c9e12a2d41f2"
+    },
+    "package": {
+      "bytes": 41593,
+      "codepoint": "1f4e6",
+      "file": "package.svg",
+      "keywords": [
+        "package",
+        "parcel",
+        "container"
+      ],
+      "sha256": "98ffe9a6c3b209d639ea2c5a29adabd9468f66d538ffd0ec56a978fe96f6b754"
+    },
+    "pencil": {
+      "bytes": 3066,
+      "codepoint": "270f",
+      "file": "pencil.svg",
+      "keywords": [
+        "pencil",
+        "writing",
+        "drawing",
+        "sketch"
+      ],
+      "sha256": "5adac2395f2be13ba9bd93cf106597352668126d2b9ac0fa1a72f2365bdb2c60"
+    },
+    "printer": {
+      "bytes": 3732,
+      "codepoint": "1f5a8",
+      "file": "printer.svg",
+      "keywords": [
+        "printer",
+        "printing"
+      ],
+      "sha256": "69d69ead6026a3747edf2e09f99e6717d36fb38acd461683fbbb723b01b0bb83"
+    },
+    "puzzle_piece": {
+      "bytes": 2941,
+      "codepoint": "1f9e9",
+      "file": "puzzle_piece.svg",
+      "keywords": [
+        "puzzle",
+        "jigsaw"
+      ],
+      "sha256": "334f25f98c0440ec9035e05ae7da6bc7f04faac89440a9b31ecd22d0dd00f499"
+    },
+    "question": {
+      "bytes": 2188,
+      "codepoint": "2753",
+      "file": "question.svg",
+      "keywords": [
+        "question",
+        "puzzling"
+      ],
+      "sha256": "9f7eb17e382785afb4c1a6696a2c77b06c46910e104efe120c595bb1b6e842e9"
+    },
+    "rainbow": {
+      "bytes": 1485,
+      "codepoint": "1f308",
+      "file": "rainbow.svg",
+      "keywords": [
+        "rainbow",
+        "spectrum"
+      ],
+      "sha256": "23a80becfb38d89ebf3ab8aa57136dce162bc74daac358668694e07499101fba"
+    },
+    "repeat": {
+      "bytes": 1737,
+      "codepoint": "1f501",
+      "file": "repeat.svg",
+      "keywords": [
+        "repeat",
+        "loop",
+        "iterate"
+      ],
+      "sha256": "925ccf8955c5e53d16e093f0134761859d316178e91af753860a68dc8821eca5"
+    },
+    "rocket": {
+      "bytes": 5413,
+      "codepoint": "1f680",
+      "file": "rocket.svg",
+      "keywords": [
+        "rocket",
+        "launch",
+        "spacecraft"
+      ],
+      "sha256": "e1cb1fc2f6bf275e7e5d08725f70fbd64833de75e50afdbaa481dd16cca0283a"
+    },
+    "ruler": {
+      "bytes": 1948,
+      "codepoint": "1f4cf",
+      "file": "ruler.svg",
+      "keywords": [
+        "ruler",
+        "measure",
+        "measuring",
+        "measurement"
+      ],
+      "sha256": "5380668922935d4ebd28ac7b7170288f3b7e28108ecadf6dbaf2c2aec33a108d"
+    },
+    "seedling": {
+      "bytes": 1593,
+      "codepoint": "1f331",
+      "file": "seedling.svg",
+      "keywords": [
+        "seed",
+        "seedling",
+        "sprout",
+        "planting"
+      ],
+      "sha256": "cd0992fa3de629e3887cdf003f879875a9dfa6041a81072055fd0e92a6b5eca7"
+    },
+    "snowflake": {
+      "bytes": 7426,
+      "codepoint": "2744",
+      "file": "snowflake.svg",
+      "keywords": [
+        "snow",
+        "snowflake",
+        "freeze",
+        "frozen"
+      ],
+      "sha256": "55c9ed52bd0ed4595b07ab0f0695b418256ebc963c214fc3d19efff58f44b419"
+    },
+    "sparkles": {
+      "bytes": 2637,
+      "codepoint": "2728",
+      "file": "sparkles.svg",
+      "keywords": [
+        "magic",
+        "magical",
+        "sparkle"
+      ],
+      "sha256": "e17f4ea67fb41fd082235eae90f03722980342d478c817e1359ec068d2fa64ab"
+    },
+    "star": {
+      "bytes": 1257,
+      "codepoint": "2b50",
+      "file": "star.svg",
+      "keywords": [
+        "star",
+        "starlight"
+      ],
+      "sha256": "35ba477f2cd01990a2712384b2ad5c2f9b0ec1def9ad94aaec139ed27f5286cf"
+    },
+    "sun": {
+      "bytes": 2548,
+      "codepoint": "2600",
+      "file": "sun.svg",
+      "keywords": [
+        "sun",
+        "sunlight",
+        "solar",
+        "daylight"
+      ],
+      "sha256": "822abba4f2e39d9059d85964116b1f9300e04320ee1a9e5af09831bf2f8c82df"
+    },
+    "telescope": {
+      "bytes": 5662,
+      "codepoint": "1f52d",
+      "file": "telescope.svg",
+      "keywords": [
+        "telescope",
+        "astronomy"
+      ],
+      "sha256": "ff0c033d4fb14014174706d90371cfd98bbda3d01985cc425ee1e70485fce5d9"
+    },
+    "television": {
+      "bytes": 3346,
+      "codepoint": "1f4fa",
+      "file": "television.svg",
+      "keywords": [
+        "television"
+      ],
+      "sha256": "f556faaf59ec7683c90455837251e4fa288499421c1c3730620033c953bf82d6"
+    },
+    "warning": {
+      "bytes": 2324,
+      "codepoint": "26a0",
+      "file": "warning.svg",
+      "keywords": [
+        "warning",
+        "caution",
+        "danger"
+      ],
+      "sha256": "040e0a04356c12994f61a7011f47c7f278394f039feb01b5f3b2f82be3c7cc1f"
+    }
+  },
+  "license": "Noto Emoji, Apache License 2.0. https://github.com/googlefonts/noto-emoji/blob/main/LICENSE",
+  "source": "https://raw.githubusercontent.com/googlefonts/noto-emoji/main/svg"
+}

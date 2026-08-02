@@ -41,7 +41,10 @@ API_KEY_VARS = ("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENAI_API_KEY")
 
 # Bumping this invalidates every cached annotation, which is correct: a changed
 # prompt is a changed function.
-PROMPT_VERSION = 3
+# Bump on any SYSTEM_PROMPT or RESPONSE_SCHEMA change: the spec cache key is
+# derived from this, so a stale key would serve annotations produced by the old
+# prompt and the change would appear to have no effect.
+PROMPT_VERSION = 5
 
 SYSTEM_PROMPT = """\
 You are the annotation stage of a deterministic video compiler. You label \
@@ -58,8 +61,20 @@ on screen.
 - `ExpressionCard` — an arithmetic relationship. `headline` is the relationship; \
 `items` are up to three supporting values.
 - `KeyValuePanel` — two to four related values, no single headline. `items`.
+- `ComparisonGrid` — two to five values whose *relative sizes* are the point \
+("this one is far bigger than that one"). `items`, plus an optional `caption`. \
+Prefer this over `KeyValuePanel` when the narration contrasts magnitudes; the \
+values are drawn as proportional bars, so comparable numbers work best.
 - `ProcessSteps` — a sequence of stages. `steps`, two to five of them.
 - `Fallback` — prose with nothing quantitative in it. `title` only, or nothing.
+
+## Tuples draw as colour
+
+A `tuple` value whose three components are 0-255 is painted on screen as an \
+actual colour swatch (four components in 0-100 are treated as CMYK). So when the \
+narration describes a specific colour by its components, emit it as a tuple \
+expression — `expr: "(255, 0, 0)"`, `format: "tuple"` — and the viewer sees the \
+colour, not just the digits. Group such values into one `KeyValuePanel`.
 
 ## The rule about numbers
 
@@ -72,8 +87,22 @@ Python evaluates the expression; if you supply a number as text the run fails.
 Expressions are Python arithmetic: `+ - * / // % **`, parentheses, and \
 `abs round min max sum sqrt log log2 log10 exp floor ceil gcd lcm hypot \
 factorial degrees radians sin cos tan`, plus the constants `pi e tau`. A tuple \
-like `(255, 0, 0)` is a valid expression. Nothing else — no names, no strings, \
-no comparisons.
+like `(255, 0, 0)` is a valid expression. Nothing else — no strings, no \
+comparisons.
+
+**Every expression must be fully numeric.** No variable names, ever. Algebra is \
+not evaluable, so a formula written with symbols is discarded and that value \
+does not appear on screen at all.
+
+- WRONG: `expr: "P * (1.07)**N"` — `P` and `N` are names, not numbers.
+- WRONG: `expr: "72 / R"` — same problem.
+- RIGHT: `expr: "1000 * (1.07)**30"` — substitute the actual figures the \
+narration gives.
+
+If the narration states a general formula without concrete figures, put the \
+formula in the *label* as prose ("Balance grows by 7% each year") and give the \
+value a concrete expression using the numbers the narration does supply. If \
+there are no concrete numbers, choose `Fallback` for that segment.
 
 Use `text` only for genuinely non-numeric labels: "RGB", "8-bit", "sRGB". A \
 `text` value that is entirely digits is rejected.
@@ -134,7 +163,9 @@ _VALUE_SPEC_SCHEMA: dict[str, Any] = {
     "properties": {
         "label": {"type": "string"},
         "expr": {"type": "string", "nullable": True,
-                 "description": "Python arithmetic expression, e.g. '2**8'. Preferred."},
+                 "description": "Fully numeric Python arithmetic, e.g. '2**8' or "
+                                "'1000 * (1.07)**30'. No variable names — 'P * r**N' "
+                                "is rejected and the value is discarded."},
         "text": {"type": "string", "nullable": True,
                  "description": "Literal non-numeric text. Rejected if all digits."},
         "format": {
@@ -165,7 +196,8 @@ RESPONSE_SCHEMA: dict[str, Any] = {
                     "template_name": {
                         "type": "string",
                         "enum": ["TitleCard", "KeyValuePanel", "ExpressionCard",
-                                 "BigNumber", "ProcessSteps", "Fallback"],
+                                 "BigNumber", "ComparisonGrid", "ProcessSteps",
+                                 "Fallback"],
                     },
                     "title": {"type": "string"},
                     "subtitle": {"type": "string", "nullable": True},

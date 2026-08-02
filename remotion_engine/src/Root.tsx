@@ -42,8 +42,16 @@ const DEFAULT_PROPS: SceneCompProps = {
 			{label: 'Range', expr: null, format: 'range', unit: null, resolved: '0–255'},
 		],
 	},
+	// Exercises the icon path in `npx remotion studio` without needing a pipeline
+	// run. Empty would preview the null-provider layout, which is the case least in
+	// need of eyeballing — a wrongly placed icon is what someone opens the studio
+	// to catch.
+	assets: [
+		{kind: 'svg', id: 'artist_palette', path: 'icons/artist_palette.svg', cue_word: 'channel'},
+	],
 	word_triggers: [
 		{word: '256', start_ms: 3200, end_ms: 3800},
+		{word: 'channel', start_ms: 4600, end_ms: 5100},
 		{word: '0–255', start_ms: 5200, end_ms: 5800},
 	],
 	theme: DEFAULT_THEME,

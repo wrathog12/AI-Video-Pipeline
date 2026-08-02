@@ -45,7 +45,12 @@ providers:
   # paid account — so a dead key at the live review still yields a video.
   tts: "edge-tts"       # cartesia | edge-tts | piper
   aligner: "native"     # native | whisperx
-  assets: "null"        # null | icon_pack
+  # icon_pack matches narration keywords against the vendored Noto Emoji set
+  # (Apache-2.0, baked to remotion_engine/public/icons by
+  # `python -m python_pipeline.assets.vendor_icons`). Set to "null" for an
+  # icon-free build: every template is designed to look complete without assets,
+  # so this is a genuine toggle rather than a degraded mode.
+  assets: "icon_pack"   # null | icon_pack
   renderer: "remotion"
 
 tts:

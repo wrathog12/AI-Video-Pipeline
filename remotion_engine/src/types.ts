@@ -41,12 +41,39 @@ export interface Value {
    * often differ ("sixteen point eight million" vs "16.8").
    */
   cue_word: string | null;
+  /**
+   * Numeric components of a tuple result, supplied by the Python evaluator.
+   *
+   * Read this — never parse `resolved`. `resolved` is a display string, and
+   * turning "(255, 0, 0)" back into numbers here would be arithmetic in the
+   * renderer, which is the R4 boundary the expr/resolved split exists to hold.
+   * Empty for every non-tuple value, so check length before drawing.
+   */
+  channels: number[];
 }
 
 export interface WordTrigger {
   word: string;
   start_ms: number;
   end_ms: number;
+}
+
+/**
+ * A visual asset chosen by the Python asset provider (R7).
+ *
+ * `path` is relative to `public/`, resolved with Remotion's staticFile(). It is
+ * never absolute: an absolute path would bake the producing machine's directory
+ * layout into the IR, and a spec is meant to be re-renderable elsewhere.
+ *
+ * `cue_word` is the narration word that selected the asset, spelled as the
+ * narration spells it, so it can be matched against a word trigger and revealed as
+ * it is spoken.
+ */
+export interface AssetRef {
+  kind: 'svg' | 'image' | 'none';
+  id: string;
+  path: string | null;
+  cue_word: string | null;
 }
 
 export interface Theme {
@@ -68,6 +95,8 @@ export interface SceneProps {
   template_name: TemplateName;
   narration_text: string;
   props: Record<string, unknown>;
+  /** Empty under the `null` asset provider, which is the default. */
+  assets: AssetRef[];
   word_triggers: WordTrigger[];
   theme: Theme;
   orientation: Orientation;

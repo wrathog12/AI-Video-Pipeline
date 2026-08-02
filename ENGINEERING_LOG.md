@@ -175,21 +175,70 @@ dominates TTS by roughly 30:1, which is why the render cache is the one that mat
   lines and completes via the heuristic annotator. Provenance then honestly reports
   `annotator: heuristic` rather than the configured model.
 - **A/V sync.** Video duration == audio duration to six decimals on both scripts.
-- `tsc --noEmit` exits 0; `eslint src` clean.
+- `tsc --noEmit` exits 0; `eslint --ext .ts,.tsx src` clean over 15 files. ⚠️ The original form of this
+  claim was `eslint src` clean, which was false — see Dead end 11.
+
+### Verification performed on the icon build (Phase 3.5)
+
+Both scripts re-rendered end to end with `providers.assets: icon_pack`:
+
+| | Script A | Script B |
+|---|---|---|
+| Exit code | 0 | 0 |
+| Frames / duration | 4148 / 138.267000 s | 3447 / 114.900000 s |
+| On-screen values | 12 (8 computed) | 8 (8 computed) |
+| Scenes with an icon | **6 / 7** | **6 / 7** |
+| `cue_check` | **12/12 PASS**, worst 13.3 ms | **8/8 PASS**, worst 15.3 ms |
+
+- **All 12 icon cues resolve to a real word trigger.** Checked explicitly rather than assumed,
+  because a missed cue is not fail-safe: `useCueProgress` returns 1 with no trigger, so an unmatched
+  icon would appear at frame 0 and silently ignore the audio rather than failing visibly.
+- **Frames read at the cue times**, not just probed for existence: 🍎 top-right of the title card at
+  t=4.0 s; 👁 bottom-right of the RGB panel at t=26.8 s; 🧮 on the range card at t=62.0 s; 📅 top-left
+  of script B's ComparisonGrid at t=70.3 s, clear of all three bars.
+- **The R7 seam exercised in all four states**, since an interface with one live implementation is not
+  a seam: `icon_pack` resolves; `null` returns `[]`; an unknown provider name raises
+  `Unknown asset provider: 'bogus' (available: null, icon_pack)`; and an `IconPackProvider` pointed at
+  an empty directory reports `available=0` and resolves to `[]` — a missing pack degrades to no icon,
+  never to a render error.
+- **`render_key` proven sensitive to assets**: no-assets, apple and eye produce three distinct
+  digests, and omitting the argument equals the empty case. Without this, flipping the provider would
+  serve cached icon-free frames.
+- `tsc --noEmit` exits 0 and `eslint --ext .ts,.tsx src` is clean on the 16-file tree (with
+  `SceneIcon.tsx` added).
 
 ### Known gaps, stated rather than hidden
 
-- **The Gemini path has never made a live call.** The schema builds, `parse_response` is tested
-  against synthetic payloads including fenced JSON and bare lists, and the fallback is exercised —
-  but no request has left the machine, because the key is not on disk yet.
-- **Script B yields 5/7 `Fallback` scenes** on the heuristic annotator, because it cannot parse
-  word-form arithmetic ("seventy-two divided by seven", "one point zero seven raised to the number
-  of years"). This is precisely the gap the LLM annotator exists to close, and it is the single most
-  useful thing to measure the moment the key lands.
+- ~~**The Gemini path has never made a live call.**~~ **Resolved in Phase 3.5.** Live calls now
+  succeed on both scripts; the measured annotator contribution is recorded in that section.
+- ~~**Script B yields 5/7 `Fallback` scenes**~~ on the heuristic annotator, because it cannot parse
+  word-form arithmetic ("seventy-two divided by seven"). **Measured with Gemini live: 1/7.** That
+  delta is the annotator's entire contribution.
 - **Cartesia is untested** against a real key, and the voice UUID in `config.yaml` is an unverified
-  placeholder.
+  placeholder. The shipped videos use `edge-tts`.
+- ~~**`assets` is always empty.**~~ **Closed in Phase 3.5.** The `icon_pack` provider now matches
+  narration keywords against 53 vendored Noto Emoji SVGs; 6/7 scenes carry an icon on both scripts and
+  the apple appears in scene 1 of script A. What remains true is the honest limit: **an icon labels
+  the topic, it does not encode a value.** The swatch strip and the comparison bars are content; the
+  apple is a caption. So this closes "I don't see an apple" without closing "the frame feels sparse" —
+  scene *count* is a separate axis that only sub-scene beats would move.
+- **The catalog is a hand-made mini-ontology.** 53 icons, ~172 keywords, curated by hand. A script
+  about a topic outside that vocabulary gets fewer icons, and the only fix is a human adding aliases.
+  This is deliberate — see Dead end 12 for the three alias rules and why automatic import cannot
+  replace the judgement — but it is maintenance debt, and "huge package of emojis" oversells it: the
+  pack is large, the *usable curated slice* is necessarily small.
 - `cue_check.py` deliberately does not claim provider timestamp accuracy — only matching and
   quantisation. See its docstring for the three-way decomposition of the ±150 ms budget.
+- **`README.md`, `Dockerfile`, `docker-compose.yml` and `run.ps1` are 0-byte placeholders**, and
+  `context.md` §3 marked all four as existing until this was checked with `stat`. Same class of error as
+  the 0-byte components in Phase 3.5: a file that exists is not a file that is written, and a ✓ in a
+  directory tree is the cheapest place in the project to state a falsehood. `run` and `run.cmd` work, so
+  R1 holds; the clean-machine story in §10 is a plan, not a state.
+- **R3 has not been re-verified on the icon build.** `verify_determinism.py` last passed on the
+  pre-icon engine. Nothing in the icon path is non-deterministic by construction — keyword extraction
+  and lookup are pure functions of the script, glyphs are files on disk, and every animation is a
+  function of `useCurrentFrame()` — but "by construction" is exactly the reasoning Dead ends 4 and 11
+  punished. It is unverified, not verified.
 
 ---
 
@@ -320,6 +369,278 @@ the display was wrong, which by R4's standard is still a mangled digit. `_suppor
 
 ---
 
+## Phase 4 — Making the frame carry the topic (in progress)
+
+**The complaint that started it.** With real keys in place and both videos watched: *"they don't have
+much elements … the narration mentions apple but I don't see any red apple … when explaining RGB, no
+colour palette showing anything … it looks pale and bland."*
+
+The honest diagnosis was not a design flaw. `SwatchStrip.tsx`, `CountUp.tsx`,
+`ComparisonGrid.tsx` and all three `python_pipeline/assets/*.py` files were **0 bytes, imported by
+nobody**. The architecture had anticipated exactly this complaint; the code was never written. Worth
+recording because the failure mode is specific: a directory tree that looks complete, a design doc
+that describes the missing behaviour in detail, and no import anywhere that would have surfaced the
+gap. `tsc` cannot fail on a component that nothing references.
+
+Roughly half the blandness was also a *different* cause: the videos watched had been produced on the
+degraded heuristic path, before any key was present. Live Gemini changed the numbers materially.
+
+| | Heuristic (what was watched) | Gemini (live) |
+|---|---|---|
+| Script A on-screen values | 6 | **12** |
+| Script B on-screen values | 6, mostly junk | **8** |
+| Script B `Fallback` scenes | **5 of 7** | **1 of 7** |
+
+Gemini parses word-form arithmetic the heuristic cannot: "a thousand dollars at seven percent for
+thirty years" → `1000 * (1.07)**30` → `7612`.
+
+**What was built, part 1.** The three empty components, plus the structured-data change that makes a
+swatch possible without breaking R4 (below).
+
+**What was built, part 2 — the `icon_pack` provider.** 53 Noto Emoji SVGs (Apache-2.0), vendored to
+`remotion_engine/public/icons/` by a one-time `python -m python_pipeline.assets.vendor_icons` and
+committed with a SHA-256 manifest. `assets/base.py` extracts keywords in Python, `icon_pack.py` looks
+them up, `SceneIcon.tsx` draws at most one per scene in a corner.
+
+Four decisions worth recording, because in each case the obvious version is wrong:
+
+1. **Keywords are extracted in Python, not requested from the LLM.** Asking the annotator for them
+   would bump `PROMPT_VERSION`, invalidating every cached annotation on disk — paying the annotation
+   cache to add decoration. It would also make icon choice model-dependent, importing R3's problem
+   into the visual layer. And it is unnecessary: the narration already contains the nouns.
+2. **A diffusion model was considered and rejected** (the user asked directly). It emits pixels, not
+   paths; vectorising them is blobby; and output is not reproducible across GPU, driver and kernel
+   even at a fixed seed, which breaks R3 outright. A build-time bake would have been acceptable, but a
+   curated pack is better *and* auditable — a generated icon has no upstream anyone can check.
+3. **Icons are absolutely positioned, never in flow.** If an icon participated in layout, whether the
+   provider matched a keyword would change where the text sits — so the same script would compose
+   differently under `null` and `icon_pack`, and the "every template looks complete with
+   `assets: []`" property would quietly stop holding.
+4. **`assets` is a component of `render_key`.** Switching providers changes what is on screen without
+   touching a single prop. Omitting it would serve icon-free frames from cache and make the new
+   provider look like it does nothing — the same class of bug as Dead end 8.
+
+**Measured on both scripts.** 6/7 scenes carry an icon on each; 12/12 icon cues match a real word
+trigger, so none silently defaults to show-immediately. Script A scene 1 shows the apple.
+
+**Still not approved / not started:** background motifs and sub-scene beats. Stated plainly to the
+user before building: icons are worth roughly a 15–20% improvement because **an icon labels the topic
+while a swatch encodes a value**, and only sub-scene beats would move scene *count*, which was the
+other half of the original complaint.
+
+---
+
+## Dead end 7 — A colour swatch cannot be drawn from the string `"(255, 0, 0)"`
+
+**What I expected.** The IR already carries `resolved: "(255, 0, 0)"`. A swatch component reads it,
+splits on commas, and paints. Half an hour of work.
+
+**Why that is wrong.** Splitting `"(255, 0, 0)"` back into three numbers is arithmetic in the
+renderer, performed on a value the pipeline promises Python computed — precisely the R4 boundary that
+the whole `expr`/`resolved` split exists to hold. It would also be *silently* wrong rather than
+loudly wrong: a parse that mis-handles a format change paints a plausible colour next to a correct
+number, and a wrong colour beside a correct number reads as *the number* being wrong.
+
+**Resolution.** `Value.channels: list[float]`, filled by `evaluator.channels_of()` from the tuple the
+evaluator already computed, and never by the annotator. The structure was always there; it was being
+discarded at the formatting step. `channels_of` returns `[]` for anything that is not a tuple of
+finite numbers — a partially-numeric tuple degrades to "no channels" instead of a half-filled list.
+
+**The topic-agnosticism trap inside the fix.** The obvious implementation says "channels[0] is red".
+That is the Script-A trap in a new place: any three numbers would then paint a colour. `classifyChannels`
+decides by *arity and range* — 3ch/0–255 → rgb, 4ch/0–100 → cmyk, 1ch → greyscale ramp, **everything
+else → proportional bars**. The `bars` branch is the load-bearing one. `[1967, 7612]` from the compound
+interest script has two channels; guessing a colour from it would produce a confidently wrong swatch.
+`SwatchStrip` returns `null` when nothing has channels, so no template needs to know whether *this*
+script is about colour.
+
+---
+
+## Dead end 8 — Editing a template served the previous run's frames
+
+**What I expected.** Write the new components, re-run, see them.
+
+**What actually happened.** Caught before it could waste a debugging session, but only by reading
+`render_key` while wiring the components in: the key hashed props, theme and dimensions — and **not the
+renderer's own source**. Every scene would have been a cache HIT after a component rewrite.
+
+**Why this failure is worse than it sounds.** It does not look like a stale cache. It looks like *the
+edit didn't work* — so it gets debugged in the TSX file, which is correct code, indefinitely.
+
+**Resolution.** `cache.engine_fingerprint()` hashes all of `src/` plus the Remotion config and
+lockfile into one digest that `render_key` now requires. Deliberately coarse: any component edit
+invalidates every scene. Being wrong toward "re-render too much" costs render minutes; being wrong the
+other way costs correctness. Verified stable across calls, moving on edit, and returning to the
+original digest on restore.
+
+---
+
+## Dead end 9 — One algebraic expression killed the entire video
+
+**What I expected.** Script B would render with the new components like script A did.
+
+**What actually happened.** `[engine] FAILED: EvaluationError: Unknown name 'P' (available: e, pi,
+tau)`, exit 1, no video at all. Gemini had annotated one segment with `expr: "P * (1.07)**N"` and
+another with `72 / R` — the narration states a *general formula*, and the model transcribed it
+faithfully as algebra.
+
+**What was right and what was wrong.** The evaluator was right to refuse it: free variables are exactly
+what the whitelist exists to stop, and the message named the offending symbol precisely. The *blast
+radius* was wrong. R2 says an unseen script must still produce a video, and one unevaluable value out
+of nine should cost that one value, not the run. A hard failure here also makes the pipeline brittle
+in the most annoying way possible — non-deterministically, since it depends on model phrasing.
+
+**Resolution, in two layers.** Both were needed, and neither alone is sufficient:
+
+1. **Degrade, don't abort.** `resolve_props` catches `EvaluationError` per value and drops that value
+   from the tree entirely — not to an empty `resolved`, because a blank box on screen reads as a
+   rendering bug while an absent one reads as "this scene has less to show". Every drop is returned as
+   a warning and printed by the run log, so a run that quietly lost half its numbers is impossible.
+   A value-led template left with nothing (`BigNumber` with no number is a title in empty space) is
+   downgraded to `Fallback` — the same repair path `reconcile()` already uses.
+2. **Stop it at the source.** The prompt said "no names", which was evidently too weak against a
+   narration that dictates a formula. It now shows the wrong form and the right form side by side
+   (`P * (1.07)**N` vs `1000 * (1.07)**30`), tells the model to put a general formula in the *label*
+   as prose, and to choose `Fallback` when a segment has no concrete figures. `PROMPT_VERSION` 4 → 5.
+
+Layer 2 fixed script B outright — 8/8 values numeric, zero drops, and `ComparisonGrid` selected for the
+decade-vs-decade contrast. Layer 1 is what keeps the *next* unseen script from failing the same way,
+and it is the one that matters for R2: verified by hand against `P * (1.07)**N`, `72 / R` and `foo+1`,
+producing 3 drops, 1 downgrade, and a rendered video.
+
+**The lesson.** A correct guard in the wrong scope is still a defect. "Refuse unsafe input" and "fail
+the whole run on unsafe input" are separate decisions, and I had only made the first one.
+
+---
+
+## Dead end 10 — A cue word that could not possibly match, found only by running the checker
+
+**What I expected.** With the swatches rendering, script A was done. Run `cue_check.py` as a
+formality.
+
+**What actually happened.** `FAIL — 2 cue word(s) matched no trigger; these elements ignore the audio
+and appear at frame 0: scene_05.items[0]='(255, 0, 0)', scene_05.items[1]='(0, 0, 0)'`. 8/10 matched.
+
+**Hypothesis and why it was structural, not a bad guess by the model.** `word_triggers` are single
+tokens, because that is what a TTS provider emits — `['Pure','red','is','255','0','0',…]`. A cue word
+spanning several tokens can therefore *never* match, at any similarity threshold. The prompt asks for
+"the single word where the value should appear", and for a value whose `resolved` is `(255, 0, 0)` the
+model copied the whole tuple. That is a faithful reading of the instruction and it is unmatchable. The
+new tuple/swatch feature is what created the cue words that trip it.
+
+**Why this had to be fixed in Python, not in the matcher.** The tempting fix is a fourth pass in
+`findTrigger` that tries each sub-token of the cue. But only the narration can say whether a candidate
+token was actually spoken, and the narration is not in the renderer. Repairing in `build_spec` — the
+first point where a props tree and its narration are both in hand — also means the repair is *visible
+in the IR* and logged, rather than being a silent leniency at render time.
+
+**Resolution, and the subtlety in it.** `repair_cue` reduces a multi-token cue to its **least ambiguous**
+token rather than its first. `(255, 0, 0)` contains "255" once and "0" five times; anchoring to "0"
+fires on whichever zero came first in the sentence, which is usually not the value's own. Rarest token
+wins → "255", which is the word a viewer actually hears.
+
+**And the regression that fix caused, caught one command later.** My first tokeniser split on all
+punctuation, which rewrote `8-bit` → `8` and would have rewritten `16,777,216` → `16`. Both of those
+cues were *already matching*: a hyphenated compound and a grouped number are each pronounced as one
+event and arrive as one trigger. So the repair pass was about to damage two working cues in order to
+fix two broken ones. Internal hyphens, commas and dots are now part of a token; only punctuation
+*around* a token splits. Verified: `8-bit` and `16,777,216` pass through untouched, the three tuples
+repair, and a cue absent from the narration is dropped to `None` rather than left pointing at nothing.
+
+**The lesson.** A repair pass is a rewrite of working data as much as of broken data, and its blast
+radius needs the same scrutiny as its correctness. I would not have caught this by reading the diff —
+only by running the checker that reports on *all* cues, not just the failing ones.
+
+---
+
+## Dead end 11 — `eslint src` linted zero files, and I had already claimed it clean
+
+**What actually happened.** `npx eslint src` → *"No files matching the pattern 'src' were found"*, exit
+2. ESLint 8 resolves only `.js` from a bare directory argument; `--ext .ts,.tsx` is required. A clean
+exit from `eslint src` means zero files were linted, not zero problems.
+
+**Why it is recorded here.** The claim "`eslint src` clean" was already written into this log and into
+commit `fa28bb8`. It was false. This is the same class of mistake as Dead end 4 — trusting a guard I had
+not watched fail — on the same guard, one phase later.
+
+**Resolution.** `--ext .ts,.tsx` (which `npm run lint` in `package.json` already had). Confirmed via
+`--format json` that **15 files** are now actually linted, then probed with a file containing
+`Math.random()`, `Date.now()` and `new Date()` → **5 errors fired** (`no-restricted-syntax` ×3,
+`no-restricted-globals` ×2). The determinism ban is now a guard I have watched fail.
+
+---
+
+## Dead end 12 — The icon pack matched 12 of 14 scenes and was still wrong
+
+**What I expected.** Take a scene's keywords in order of appearance, return the first one with an
+icon. The first concrete noun in a segment is usually its subject, so first-position ordering should
+land on the thing the scene is about.
+
+**What actually happened.** I printed the per-segment match table before rendering anything. 12/14
+scenes matched — a better hit rate than I had estimated to the user — and it was unusable:
+
+```
+seg1: desktop   <- 'Computers'      seg1: chart_increasing <- 'Compound'
+seg2: eye       <- 'vision'         seg2: gear             <- 'mechanism'
+seg3: ruler     <- 'measure'        seg3: calendar         <- 'year'
+seg4: desktop   <- 'computer'       seg4: calendar         <- 'years'
+seg5: (none)                        seg5: calendar         <- 'decade'
+seg6: desktop   <- 'monitor'        seg6: calendar         <- 'years'
+seg7: camera    <- 'photograph'     seg7: (none)
+```
+
+Two distinct defects that a hit-rate number cannot show.
+
+**Defect 1: the apple never appeared.** Script A's opening segment is *"When you look at an apple, you
+see red. A computer, however, only understands numbers."* It says "Computers" before it says "apple",
+so first-position ordering picked a monitor. The single thing the user actually asked for — *"the
+narration mentions apple but I don't see any red apple"* — was the one thing a 12/14 match rate was
+still failing to deliver, and the metric looked fine.
+
+**Defect 2: repetition read as a template artifact.** 🖥 three times in seven scenes, 📅 four times.
+The same glyph recurring every other scene stops reading as illustration and starts reading as a bug
+in the renderer, which is worse than a plain frame — the same argument as Dead end 7's refusal to
+guess a colour, one level up.
+
+**Resolution — two mechanisms, both already used elsewhere in this codebase.**
+
+1. `base.rank_by_rarity` orders a scene's keywords by frequency across the **whole script**, rarest
+   first. A word the script says once is what *this* scene is about; a word it repeats throughout is
+   background vocabulary. Script A says "computer" four times and "apple" once. This is
+   rarest-token-wins from `annotate.repair_cue` (Dead end 10) applied to a different problem — and it
+   picks the apple.
+2. The provider spends each glyph at most once per video and keeps scanning a scene's remaining
+   keywords when its first choice is taken. A second-choice icon that is new beats a first-choice one
+   the viewer has already seen.
+
+Result: 12/14 → **12/14**. The hit rate did not move at all; what moved is that every icon is now the
+right one and no glyph repeats.
+
+```
+seg1: apple     <- 'apple'          seg1: sparkles         <- 'Magic'
+seg2: eye       <- 'vision'         seg2: gear             <- 'mechanism'
+seg3: ruler     <- 'measure'        seg3: abacus           <- 'arithmetic'
+seg4: abacus    <- 'counting'       seg4: calendar         <- 'decade'
+seg5: (none)                        seg5: coin             <- 'cent'
+seg6: desktop   <- 'monitor'        seg6: chart_increasing <- 'compound'
+seg7: camera    <- 'photograph'     seg7: (none)
+```
+
+**Why this is the entry worth keeping.** The aggregate metric was identical before and after, so no
+amount of staring at 12/14 would have surfaced either defect. Printing the actual per-scene choices
+cost one command and caught both — before ~12 minutes of rendering, and before showing the user a
+video whose headline feature still didn't do the thing they asked for.
+
+A related trap in the same table, caught by reading the alias lists rather than the output: `power`
+mapped to 🔋. *"Two to the eighth power"* is arguably the most likely phrase in an explainer script,
+so the single commonest sentence in the corpus would have drawn a battery beside an exponent.
+Excluded, along with `right` (usually "right?" or "the right-hand side", not "correct"), `note`,
+`drop`, `fall` and `space`. **A word with a dominant non-literal sense cannot earn an icon, however
+sensible the mapping looks in a list** — and the vendoring step now warns when two icons claim the
+same keyword, which is how the 🌱-vs-📈 collision on "grow" was found.
+
+---
+
 ## Incidental fixes worth recording
 
 - **`soundfile` cannot infer format from `.wav.tmp`.** Atomic cache writes stage to a temp name, and
@@ -349,6 +670,11 @@ the display was wrong, which by R4's standard is still a mangled digit. `_suppor
   model emit each template's prop shape directly. Seven nested shapes is seven ways to be subtly
   wrong, prop layout is a renderer concern the model should not know, and adding a template would
   invalidate every cached annotation. The model now returns one uniform `Annotation`; `build_props`
-  in `annotate.py` maps it per template. `ComparisonGrid` is excluded from
+  in `annotate.py` maps it per template. `ComparisonGrid` was originally excluded from
   `IMPLEMENTED_TEMPLATES` for exactly this reason — the flat contract has no notion of columns, and
-  faking one would be worse than a `Fallback`.
+  faking one would be worse than a `Fallback`. It is now implemented, but as **proportional bars over
+  the flat `items[]`**, not as the table the design specified: a comparison is fundamentally about
+  relative magnitude, which a flat list of computed numbers already carries, so bars need no new
+  annotation shape and read the medium better than a grid of text. Bar widths are geometry only —
+  every label on screen is still `value.resolved` verbatim, so a rounding difference in a width can
+  never become a wrong number on screen.

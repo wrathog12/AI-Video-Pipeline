@@ -7,12 +7,17 @@
  * reviewer. This degrades instead: narration text on the theme background,
  * legible, with any values it can find.
  *
- * It reads nothing beyond `narration_text`, so it cannot itself throw.
+ * It reads nothing beyond `narration_text` and an optional icon, so it cannot
+ * itself throw. The icon is worth the one extra prop read precisely here: Fallback
+ * is the emptiest scene in any video, so it is where a topic marker earns the most
+ * — and `SceneIcon` renders nothing at all when there is no asset or the file
+ * fails to load, which keeps this template's "must never fail" property intact.
  */
 
 import React from 'react';
 import {interpolate, useCurrentFrame, useVideoConfig} from 'remotion';
 
+import {SceneIcon} from '../components/SceneIcon';
 import {useMetrics, rootStyle} from '../theme';
 import type {SceneProps, Value} from '../types';
 
@@ -40,6 +45,8 @@ export const Fallback: React.FC<SceneProps> = ({
 	theme,
 	orientation,
 	output_scale,
+	assets,
+	word_triggers,
 }) => {
 	const m = useMetrics(theme, orientation, output_scale);
 	const frame = useCurrentFrame();
@@ -65,6 +72,7 @@ export const Fallback: React.FC<SceneProps> = ({
 				gap: m.space(3),
 			}}
 		>
+			<SceneIcon assets={assets} triggers={word_triggers} m={m} size={13} />
 			{title ? (
 				<div
 					style={{

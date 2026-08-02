@@ -55,7 +55,7 @@ script fail visibly at review.
 | **R4** | Computed values | LLM emits **symbolic expressions** (`{"expr": "2**8", "format": "int"}`); Python evaluates and formats. OCR gate asserts each resolved string is actually legible on a rendered frame. |
 | **R5** | Word sync ±150 ms | Primary: TTS-native word boundaries (edge-tts `WordBoundary`, ElevenLabs char timestamps). Fallback: WhisperX forced alignment behind the same `Aligner` interface. Numerals/symbols normalised before alignment and mapped back to original tokens. |
 | **R6** | Inspectable IR | `scene_spec.json` with `schema_version`, per-scene `start_ms`/`duration_ms`, `assets`, and a `provenance` block. `--spec` re-renders from an edited spec without re-invoking the LLM. |
-| **R7** | Swappable components | Four interfaces: `TTSProvider`, `Aligner`, `AssetProvider`, `Renderer`. Selected in `config.yaml`. Resolution, aspect ratio (16:9 **and** 9:16), palette, typography are all config. |
+| **R7** | Swappable components | Four interfaces: `TTSProvider`, `Aligner`, `AssetProvider`, `Renderer`. Selected in `config.yaml`. `AssetProvider` has **two** live implementations (`null`, `icon_pack`) because an interface with one is not a seam; `TTSProvider` has `edge-tts` live and `cartesia` written but untested; `Aligner` and `Renderer` currently have one each. Resolution, aspect ratio (16:9 **and** 9:16), palette, typography are all config. |
 | **R8** | Incremental re-render | Two-tier content-addressed cache (audio, render) keyed on decoded PCM + theme + dimensions + fps. `--explain-cache` prints per-scene hit/miss and the reason for each miss. |
 
 ---
@@ -67,14 +67,15 @@ project. Files marked ✓ exist; unmarked ones are planned.
 
 ```
 .
-├── run                          # bash entry point (R1)
-├── run.cmd / run.ps1          ✓ # Windows shims — same CLI surface
+├── run                        ✓ # bash entry point (R1)
+├── run.cmd                    ✓ # Windows shim — same CLI surface
+├── run.ps1                      # 0 bytes, NOT written (run.cmd covers Windows)
 ├── config.yaml                ✓ # master configuration (R7)
 ├── requirements.txt           ✓ # pinned; optional extras commented out
 ├── .env.example               ✓ # key names only — .env itself is gitignored
-├── Dockerfile                 ✓ # pins python, node, chromium, ffmpeg, fonts
-├── docker-compose.yml         ✓
-├── README.md                  ✓ # clone → video on a clean machine
+├── Dockerfile                   # 0 bytes, NOT written — see §10
+├── docker-compose.yml           # 0 bytes, NOT written — see §10
+├── README.md                    # clone → video on a clean machine — 0 bytes, NOT written
 ├── context.md                 ✓ # this document
 ├── ENGINEERING_LOG.md         ✓ # append-only; dead ends as they happen
 │
@@ -105,15 +106,17 @@ project. Files marked ✓ exist; unmarked ones are planned.
 │   │   ├── native.py          ✓ # timings straight from the TTS provider
 │   │   └── whisperx.py          # forced-alignment fallback
 │   └── assets/
-│       ├── base.py            ✓ # AssetProvider interface
+│       ├── base.py            ✓ # AssetProvider interface + keyword extraction
 │       ├── null.py            ✓ # returns nothing; templates degrade gracefully
-│       └── icon_pack.py         # local SVG lookup by keyword
+│       ├── icon_pack.py       ✓ # local SVG lookup by keyword (default)
+│       └── vendor_icons.py    ✓ # one-time Noto Emoji fetch + SHA-256 manifest
 │
 ├── remotion_engine/
 │   ├── package.json           ✓
 │   ├── remotion.config.ts     ✓
 │   ├── .eslintrc.cjs          ✓ # the wall-clock ban — verified to actually fire
 │   ├── fonts/                 ✓ # bundled locally — never fetched at render time
+│   ├── public/icons/          ✓ # vendored SVGs + manifest.json; staticFile() root
 │   └── src/
 │       ├── Root.tsx           ✓
 │       ├── SceneDispatcher.tsx ✓ # template_name → component, Fallback on miss
@@ -126,12 +129,13 @@ project. Files marked ✓ exist; unmarked ones are planned.
 │       │   ├── BigNumber.tsx      ✓ # fitFactor shrinks the hero so digits can't clip
 │       │   ├── ProcessSteps.tsx   ✓
 │       │   ├── Fallback.tsx       ✓ # narration + safe generic layout
-│       │   └── ComparisonGrid.tsx   # NOT in IMPLEMENTED_TEMPLATES — see below
+│       │   └── ComparisonGrid.tsx ✓ # proportional bars over flat items — see below
 │       └── components/
 │           ├── WordCue.tsx     ✓ # ms → frame conversion happens HERE
 │           ├── ValueBlock.tsx  ✓ # shared value rendering; cue anchoring lives here
-│           ├── SwatchStrip.tsx ✓ # generic colour/value strip (not RGB-specific)
-│           └── CountUp.tsx     ✓
+│           ├── SwatchStrip.tsx ✓ # paints Value.channels; null when nothing is drawable
+│           ├── SceneIcon.tsx   ✓ # one out-of-flow glyph per scene; null on load failure
+│           └── CountUp.tsx     ✓ # animates plain numbers only; rests on `resolved`
 │
 ├── scripts/
 │   ├── script_a.txt           ✓ # the assignment's script
@@ -144,10 +148,18 @@ project. Files marked ✓ exist; unmarked ones are planned.
     └── scenes/                  # video-only scene MP4s
 ```
 
-`ComparisonGrid.tsx` exists but is deliberately absent from `IMPLEMENTED_TEMPLATES` in
-`annotate.py`: the flat annotation contract (§5) has no notion of columns and rows, so the annotator
-cannot fill it honestly. `reconcile()` downgrades any request for it to a template that can be
-filled, and logs the downgrade. A grid stuffed with mislabelled cells is worse than a `Fallback`.
+`ComparisonGrid.tsx` is implemented, but **not as the table this document originally specified**. The
+flat annotation contract (§5) has no notion of columns and rows, so an annotator cannot fill a grid
+honestly, and a grid stuffed with mislabelled cells is worse than a `Fallback`. It instead renders the
+flat `items[]` as **proportional horizontal bars**: a comparison is fundamentally a claim about
+relative magnitude, which a flat list of computed numbers already carries, so this needs no new
+annotation shape at all.
+
+Bar widths are geometry and nothing else. No new figure is derived and none is displayed — every label
+on screen is `value.resolved` verbatim, so a rounding difference in a bar width can never become a
+wrong number on screen. The peak is computed over comparable values only, and the accent colour goes
+to the peak *index derived from the data*, never to a hardcoded position. A non-numeric value gets a
+label and no bar rather than a guessed one.
 
 ---
 
@@ -198,7 +210,7 @@ providers:
   llm: "gemini-2.5-flash"       # annotation only; dispatched by vendor prefix
   tts: "edge-tts"               # edge-tts | piper | elevenlabs
   aligner: "native"             # native | whisperx
-  assets: "null"                # null | icon_pack
+  assets: "icon_pack"           # null | icon_pack — `null` is a real toggle, not a degraded mode
   renderer: "remotion"
 
 tts:
@@ -259,7 +271,8 @@ and re-running `--spec` changes the video (R6).
           "format": "tuple",
           "unit": null,
           "cue_word": "255",
-          "resolved": "(255, 0, 0)"
+          "resolved": "(255, 0, 0)",
+          "channels": [255.0, 0.0, 0.0]
         },
         "items": [
           {
@@ -268,12 +281,9 @@ and re-running `--spec` changes the video (R6).
             "format": "tuple",
             "unit": null,
             "cue_word": "black",
-            "resolved": "(0, 0, 0)"
+            "resolved": "(0, 0, 0)",
+            "channels": [0.0, 0.0, 0.0]
           }
-        ],
-        "swatches": [
-          { "label": "resolved", "channels": [255, 0, 0] },
-          { "label": "resolved", "channels": [0, 0, 0] }
         ]
       },
       "assets": [],
@@ -301,7 +311,8 @@ and re-running `--spec` changes the video (R6).
           "format": "thousands",
           "unit": null,
           "cue_word": "16,777,216",
-          "resolved": "16,777,216"
+          "resolved": "16,777,216",
+          "channels": []
         },
         "items": []
       },
@@ -324,12 +335,74 @@ and re-running `--spec` changes the video (R6).
   explicitly is the only version that survives. A cue that matches nothing is *not* fail-safe:
   `useCueProgress` treats a missing trigger as "show immediately", so the element silently ignores
   the audio. `cue_check.py` exists to make that countable rather than invisible.
+- **A cue word must be a single token, and `build_spec` enforces that** via `repair_cue`.
+  `word_triggers` are single tokens because that is what a TTS provider emits, so a multi-token cue
+  can never match at any threshold — and a model asked to name the word for a value whose `resolved`
+  is `(255, 0, 0)` will copy the whole tuple, faithfully and unmatchably. The repair reduces such a
+  cue to its **least ambiguous** token (rarest in the narration, earliest on a tie), which lands on
+  `255` rather than on the first of five zeroes. A cue absent from the narration becomes `None`.
+  This lives in Python and not in `findTrigger` because only the narration can say whether a candidate
+  token was spoken, and the narration is not available to the renderer.
 - `word_triggers` are **milliseconds relative to the scene's own audio**, and are invalidated when
   `derived_from.narration_sha256` no longer matches `narration_text`. Editing narration in the spec
   therefore re-aligns only that one scene.
 - `transitions` sit *between* scenes, not on them. A `transition_type` field on a scene has no
   well-defined meaning for the last scene and no second clip to blend with.
-- `assets` is present even when empty so the `AssetProvider` interface is visible in the IR (R7).
+- `assets` is present even when empty so the `AssetProvider` interface is visible in the IR (R7), and it
+  is empty in *both* examples above for a real reason rather than because the feature is unbuilt: the
+  `icon_pack` provider only matches a narration word that appears in a hand-curated catalog, and neither
+  "Pure red is (255, 0, 0)" nor "256 times 256 times 256" contains one. A populated entry looks like
+  this, from `scene_01` of Script A:
+
+  ```json
+  "assets": [
+    { "kind": "svg", "id": "apple", "path": "icons/apple.svg", "cue_word": "apple" }
+  ]
+  ```
+
+  `path` is **renderer-relative**, resolved with Remotion's `staticFile()` against
+  `remotion_engine/public/`. Never absolute: an absolute path would bake this machine's directory layout
+  into an artifact whose whole point is being re-renderable elsewhere.
+
+  `cue_word` is the narration word that *selected* the asset, spelled as the narration spells it, so the
+  icon can be revealed as it is spoken (R5) using the same `word_triggers` machinery as a value. This is
+  why keyword extraction hands back surface forms rather than normalised keys — the aligner reports the
+  token the voice actually emitted, and normalisation happens on the lookup side instead. An icon cued on
+  a word no trigger contains would not fail visibly; it would appear at frame 0 and silently ignore the
+  audio.
+
+  Keywords are extracted in **Python, not by the LLM**. Asking the annotator for them would change the
+  prompt (bumping `PROMPT_VERSION` and invalidating every cached annotation on disk), make icon choice
+  model-dependent (importing R3's problem into the visual layer), and buy nothing — the narration already
+  contains the nouns, and matching them against a fixed index is deterministic and free.
+
+  Matching is exact-after-normalisation, with at most a trivial `-s` strip. No stemming, no edit distance,
+  no embeddings: **a wrong icon is worse than no icon**, because an apple beside a segment about apples
+  reads as illustration while an apple beside a segment about compound interest reads as a bug and
+  undermines the numbers next to it. Each of those techniques buys coverage by trading away the property
+  that a match means something. Words with a dominant non-literal sense are excluded from the catalog
+  entirely for the same reason — `power` earns no battery, because an explainer that says it usually
+  means "two to the eighth power".
+
+  At most **one** asset per scene, and each glyph is spent at most once per video. Both caps are provider
+  arguments rather than template logic. An icon is a *label on the content*, not the content — a swatch
+  strip encodes a value, an apple glyph annotates a topic — and a glyph recurring every other scene stops
+  reading as illustration and starts reading as a template artifact.
+- `channels` is filled by the **evaluator**, never by the annotator, and holds the numeric components
+  of a tuple result. It exists so that a component which *draws* a value — a colour swatch, a bar —
+  reads structured numbers rather than parsing them back out of `resolved`. Turning `"(255, 0, 0)"`
+  into three integers inside a template would be arithmetic in the renderer, which is exactly the R4
+  boundary the `expr`/`resolved` split exists to hold. `channels_of()` returns `[]` for anything that
+  is not a tuple of finite numbers, so a partially-numeric tuple degrades to "not drawable" instead of
+  to a half-filled list.
+- An **unresolvable value is dropped from the tree**, not left with an empty `resolved`. A blank box on
+  screen reads as a rendering bug; an absent one reads as "this scene has less to show". Each drop is
+  logged by name, and a value-led template left with nothing is downgraded to `Fallback`. This is what
+  keeps one algebraic expression from an LLM (`P * (1.07)**N`) from failing the whole run — see Dead
+  end 9 in the engineering log.
+- `provenance.engine_sha256` fingerprints the renderer's own sources. Without it the render cache keys
+  on props alone, so editing a component serves the previous run's frames and the edit looks broken
+  rather than cached.
 
 ### Generic prop shapes
 
@@ -342,12 +415,26 @@ The universal shapes:
 | `KeyValuePanel` | `{ title, items: [{label, expr?, resolved, unit?}] }` |
 | `ExpressionCard` | `{ title, expression: {label, expr, format, resolved}, steps?: [...], items? }` |
 | `BigNumber` | `{ title, expression, caption? }` |
-| `ComparisonGrid` | `{ title, columns: [label], rows: [{label, cells: [resolved]}] }` |
+| `ComparisonGrid` | `{ title, items: [...], caption? }` — same flat shape as `KeyValuePanel`; the template scales them into bars |
 | `ProcessSteps` | `{ title, steps: [{label, detail?}] }` |
 | `Fallback` | `{ title?, items? }` — renders narration-derived text on the theme background |
 
-`SwatchStrip` takes `channels: number[]` of arbitrary length, so it works for RGB, CMYK, a
-grayscale ramp, or anything else a future script needs.
+Note that `ComparisonGrid` shares `KeyValuePanel`'s prop shape exactly. That is the point: adding a way
+to *display* a comparison required no new way to *describe* one.
+
+`SwatchStrip` reads `Value.channels` and classifies by **arity and range**, not by topic — 3 channels
+in 0–255 → RGB, 4 in 0–100 → CMYK, 1 → greyscale ramp, and anything else → proportional bars. The last
+branch is the load-bearing one: `[1967, 7612]` from the compound-interest script has two channels, and
+guessing a colour from two arbitrary numbers would paint a confidently wrong swatch beside a correct
+number — which reads as the *number* being wrong. `SwatchStrip` returns `null` when no value has
+channels, so no template needs to know whether the current script is about colour.
+
+`CountUp` animates a figure to its computed value under two rules. The final frame renders
+`value.resolved` **verbatim**, never a re-derived string, so the resting state is always Python's truth.
+And a value that is not a plain number — a tuple, a range, text — is **never animated**, because a
+half-interpolated tuple is precisely the mangled-digit failure R4 names. Its comma grouping is
+hand-rolled rather than `toLocaleString`, since locale resolution depends on the host environment and
+would make frame output machine-dependent (R3).
 
 ---
 
@@ -403,6 +490,18 @@ concern — part of the model's job, and means adding a template invalidates eve
   - Choose exactly one `template_name` from the enumerated list. If nothing fits, choose
     `Fallback`.
   - Emit no code, no markdown, no commentary.
+  - **Every expression must be fully numeric — no variable names, ever.** The prompt shows the wrong
+    and right forms side by side (`P * (1.07)**N` vs `1000 * (1.07)**30`), because "no names" alone was
+    demonstrably too weak: narration that states a general formula gets transcribed as algebra, which
+    the evaluator then refuses. A general formula belongs in the *label* as prose; a segment with no
+    concrete figures should be `Fallback`.
+  - A tuple whose three components are 0–255 is **painted as an actual colour swatch**, so a segment
+    describing a colour by its components should emit `expr: "(255, 0, 0)", format: "tuple"`. This is
+    the one place the prompt mentions a visual consequence, and it is phrased as a property of the
+    data rather than as a layout instruction — the model still never specifies colours or positions.
+- `PROMPT_VERSION` feeds the annotation cache key, so **any** prompt or schema edit must bump it.
+  Otherwise a stale key serves annotations produced by the old prompt and the change appears to have
+  had no effect. Currently 5.
 - Cache the whole annotation on `SHA256(script + prompt + model_id + schema_version)`.
 - If the API is unreachable (no key, no network — a real live-review risk), fall back to
   `heuristic_annotator.py`: regex-detect numerals, powers, ranges and tuples; pick
@@ -429,7 +528,51 @@ This stage, not the LLM, is what satisfies "computed, not authored".
 - Formatters: `int`, `thousands` (`f"{v:,}"`), `float:N`, `tuple`, `range` (`"0–255"` with an en
   dash), `percent`, `raw`.
 - Write the result into `props…resolved` and freeze it. Templates render `resolved` and never
-  compute.
+  compute. A tuple result additionally keeps its components in `channels`, because a component that
+  paints a swatch or sizes a bar must not parse numbers back out of the display string.
+- **An expression the walker refuses costs that one value, not the run.** Refusing unsafe input and
+  failing the whole render on unsafe input are separate decisions, and only the first is required. An
+  LLM handed narration that states a general formula will occasionally transcribe it as algebra
+  (`P * (1.07)**N`); the value is dropped from the tree, the drop is logged by name, and a value-led
+  template left with nothing is downgraded to `Fallback`. R2 requires an unseen script to produce a
+  video, and this is the failure mode most likely to be phrasing-dependent — i.e. the one that would
+  break unpredictably. The prompt separately forbids symbolic expressions, which is what prevents the
+  drop; this is what survives it.
+
+### Stage 3.5 — Visual assets (`assets/`) — **no LLM**
+
+Numbered 3.5 rather than renumbering everything after it, because it is genuinely a half-stage: it
+decorates an already-complete IR and every scene renders without it.
+
+- For each scene, `base.keywords_of(narration_text)` lifts candidate nouns (stopworded, deduplicated on
+  the normalised form, capped), then `base.rank_by_rarity(keywords, script_text)` re-orders them so the
+  word that is rarest **in the whole script** comes first, and the provider resolves that list.
+- **Rarity ordering, not first-appearance.** Same argument as rarest-token-wins in `repair_cue`, applied
+  to a different problem: a word the script says once is what *this* scene is about, while a word it
+  repeats throughout is background vocabulary. Script A says "computer" four times and "apple" once, so
+  first-position ordering put a monitor on the opening scene and never drew the apple — which was the
+  original complaint the whole stage exists to answer. It also thins repetition out on its own, since a
+  word that ranks last in every scene mentioning it stops being three scenes' answer.
+- `resolve` is therefore **stateful and order-dependent** — the same scene resolves differently depending
+  on what came before it. Safe here because scene order is a pure function of the script, so a run is
+  reproducible, which is what R3 actually asks. It does mean the provider is per-run rather than a shared
+  singleton; `get_asset_provider` builds a fresh one each time.
+- **Runs on the script path only, never under `--spec`.** A spec handed in with `--spec` is rendered
+  exactly as written — R6's promise is that the artifact is the contract, so a hand-edited `assets: []`
+  must stay empty rather than being helpfully refilled.
+- The glyphs are **committed to the repository**, not fetched at render time, for the same reason as the
+  bundled fonts: a frame must be a function of the repo, not of GitHub's availability.
+  `vendor_icons.py` is a one-time fetch that writes `remotion_engine/public/icons/` plus a
+  `manifest.json` of per-file SHA-256s, so the committed bytes are auditable. It writes straight into the
+  renderer's static directory rather than copying between two trees — two directories would be one more
+  place for provider and renderer to disagree, and they would disagree *silently*, as a scene whose
+  `AssetRef` resolves but whose image 404s.
+- A catalog keyword with no file on disk resolves to nothing, so an un-vendored checkout renders exactly
+  as it does under `null`. A missing pack must not be a render error, by the same R2 reasoning that says
+  an unseen script still produces a video.
+- `assets` is a component of `render_key` (§5 of Stage 5), because switching `providers.assets` changes
+  what is on screen without touching a single prop. Omit it and the cache serves icon-free frames, making
+  the new provider look inert.
 
 ### Stage 4 — TTS and alignment
 
@@ -491,6 +634,18 @@ Determinism obligations inside `remotion_engine/`:
 - Layout: `theme.ts` exposes `orientation` and a vmin-based type scale. Templates set flex
   direction from `orientation` rather than assuming a wide canvas. Clamp every computed font size
   to `min_font_px`. CI smoke-renders one frame at both 1920×1080 and 1080×1920.
+- **A scene icon is absolutely positioned decoration and nothing else** (`components/SceneIcon.tsx`).
+  If it sat in flow, whether a keyword happened to match would change where the text sits, so the same
+  script would compose differently under `null` than under `icon_pack` — destroying the property that
+  every template looks complete with `assets: []`. `rootStyle` carries `position: 'relative'` so the
+  glyph is placed against its own scene frame rather than Remotion's `AbsoluteFill`. It is small, in a
+  fixed corner per template, desaturated and under full opacity, and revealed on its `cue_word` — never
+  a large centred glyph, because Noto colour emoji are glossy and cartoon-rounded and would fight the
+  typography at any size that reads as content.
+- **A failed image load renders nothing rather than failing the video.** Remotion's `<Img>` treats a load
+  error as a render error, so one missing SVG would mean no output at all — the exact R2 failure. An
+  `onError` handler drops the icon instead. The Python provider already checks the file exists, but a
+  spec can be rendered with `--spec` on a machine whose pack was never vendored.
 
 ### Stage 7 — Audio track assembly (`audio_track.py`)
 
@@ -637,10 +792,22 @@ class Renderer(Protocol):
 ```
 
 `AssetProvider` exists because R7 names "visual asset generation" explicitly, and v1 had no such
-seam. Ship `null` (returns nothing; templates are designed to look complete without assets) and
-`icon_pack` (local SVG lookup by keyword). Argue in the log for programmatic SVG over a diffusion
-model: it is deterministic, ~free, instant, and R4 *forbids* image models for on-screen values
-anyway.
+seam. Both implementations ship and both are live: `null` (returns nothing; templates are designed to
+look complete without assets) and `icon_pack` (vendored SVG lookup by keyword, the configured default).
+An interface with one implementation is not a seam, which is why `null` is kept as a genuine toggle
+rather than deleted once `icon_pack` worked.
+
+Vendored SVG beats a diffusion model here, and the reasoning is not only cost: it is deterministic,
+~free, instant, and R4 *forbids* image models for on-screen values anyway. A generated image is also
+unauditable in a way a committed file is not — you cannot diff it against an expectation, and you cannot
+tell a good sample from a lucky one.
+
+The honest limitation is that `vendor_icons.CATALOG` is a **hand-made mini-ontology**: coverage is good
+for concrete nouns and falls off exactly where the frames are blandest, on abstractions like "interest",
+"compression", "resolution" and "bandwidth". The emoji *pack* is huge; the usable curated slice is
+necessarily small, because every alias is a claim that a glyph means that word. Measured coverage is
+6/7 scenes on each of the two scripts, and that number should be read as a property of these two
+scripts, not a rate to expect.
 
 ---
 
@@ -654,6 +821,12 @@ Chromium + ffmpeg + tesseract on bare Windows is a multi-hour yak shave for a re
 - `docker compose run engine ./run --script … --out …` as the documented happy path; native install
   documented as the alternative.
 - `run.cmd` / `run.ps1` so `./run` has a Windows equivalent.
+- Vendored icons are committed rather than fetched, so a clone renders the same frames as this machine
+  with no network at all (§6 Stage 3.5). `manifest.json` makes the bytes auditable.
+
+**Status: not built.** `Dockerfile`, `docker-compose.yml`, `README.md` and `run.ps1` are all 0-byte
+placeholders. `run` and `run.cmd` work; everything above is the plan, not the state. This is called out
+here rather than left implied because "the README promises" is currently a promise nothing keeps.
 
 **Licensing (an explicit evaluation axis in the assignment).** Remotion is *not* unconditionally
 free — a paid company licence applies above a small-headcount threshold. State the threshold, state
@@ -679,24 +852,38 @@ tested against a known-different pair so a pass means something.
 **Phase 2 — the R4 spine. ✅ COMPLETE.** `segmenter.py` + fidelity gate (9/9 sentence battery),
 `evaluator.py` (18/18 arithmetic, 20/20 hostile expressions rejected, 13/13 formats),
 `llm_annotator.py` with Gemini structured outputs. Two annotators ship: Gemini and the heuristic.
-⚠️ **The Gemini path has never made a live call** — no key on disk yet. Everything up to the request
-is exercised; the request itself is not.
+✅ **The Gemini path is now live and exercised** — see the measurement note below.
 
-**Phase 3 — breadth for R2/R7. ◐ PARTIAL.** Done: 6 templates + `Fallback`, portrait profile,
-Cartesia provider, script B on an unrelated topic, `cue_check.py`. Outstanding: `piper`, `whisperx`,
-`icon_pack`, the OCR gate (`qa_ocr.py` is a stub and off by default), and `ComparisonGrid` — which
-needs a richer annotation contract than the flat one (§6 Stage 2) and is deliberately not registered.
+**Phase 3 — breadth for R2/R7. ◐ PARTIAL.** Done: 7 templates + `Fallback` (`ComparisonGrid` now
+registered, as bars rather than a table — §3), portrait profile, Cartesia provider, script B on an
+unrelated topic, `cue_check.py`, `icon_pack`. Outstanding: `piper`, `whisperx`, and the OCR gate
+(`qa_ocr.py` is a stub and off by default).
+
+**Phase 3.5 — visual density. ◐ IN PROGRESS.** The first watched videos were correct and bland: no
+colour ever appeared even in a segment about colour, and nothing moved after the 0.5 s entry fade.
+Cause was not architectural — `SwatchStrip.tsx`, `CountUp.tsx`, `ComparisonGrid.tsx` and all three
+`assets/*.py` files were **0 bytes and imported by nobody**. Done: those three components, `Value.channels`
+as the R4-safe way to feed them, `engine_sha256` in the render key so template edits actually take
+effect, and the `icon_pack` `AssetProvider` — which is what finally puts a red apple on screen for
+Script A. Measured: **6 of 7 scenes carry an icon on each script**, `cue_check` still 12/12 and 8/8,
+and every icon cue resolves to a real word trigger. Not started, and deliberately so: background
+motifs and sub-scene beats.
+
+**Icons are a supporting layer, not the answer to "bland."** Worth stating plainly so the next reader
+does not over-read the 6/7: an emoji *labels* the topic where a swatch strip *is* the content, because
+the strip encodes a value. Scene count and the amount of movement per scene are untouched by this
+phase — sub-scene beats are what would change those, and they are not built.
 
 **Phase 4 — hardening. ☐ NOT STARTED.** Run on 3–4 self-written scripts on unrelated topics (one
 with no numbers at all, one with dates and percentages, one twice Script A's length). Fix what
 breaks. Then rehearse the live-review sequence: fresh clone → Script B → run twice → edit a spec
 value → re-render one scene.
 
-**The one measurement worth taking first.** Script B currently produces **5 of 7 `Fallback` scenes**
-on the heuristic annotator, because it cannot parse word-form arithmetic ("seventy-two divided by
-seven"). That number is the cleanest available proxy for what the LLM annotator is actually worth:
-re-run script B with Gemini live and the delta is the annotator's entire contribution, measured
-rather than asserted.
+**The measurement that was worth taking first, now taken.** Script B produced **5 of 7 `Fallback`
+scenes** on the heuristic annotator, which cannot parse word-form arithmetic ("seventy-two divided by
+seven"). With Gemini live it produces **1 of 7**, and on-screen values went 6 → 8 for script B and
+6 → 12 for script A. That delta is the LLM annotator's entire contribution, measured rather than
+asserted — and it means roughly half of "bland" was the degraded fallback path, not the templates.
 
 **Log dead ends as they happen, in a running file.** The assignment demands at least two with
 expectation / actual / hypothesis / next / resolution, and rewards specificity. Reconstructing them

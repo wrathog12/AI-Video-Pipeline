@@ -25,6 +25,13 @@ output/**
 # network dependency and a determinism hazard (see context.md, Stage 6).
 !remotion_engine/fonts/**
 
+# Vendored Noto Emoji SVGs (Apache-2.0, ~2-40 KB each) are committed for the same
+# reason as the fonts: a frame must be a function of the repository, not of
+# GitHub's availability at render time. manifest.json records a SHA-256 per file so
+# the committed bytes are auditable. Re-fetch with
+# `python -m python_pipeline.assets.vendor_icons`.
+!remotion_engine/public/icons/**
+
 # Secrets
 .env
 .env.*

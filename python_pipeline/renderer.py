@@ -49,6 +49,7 @@ class RemotionRenderer:
             "template_name": scene.template_name,
             "narration_text": scene.narration_text,
             "props": scene.props,
+            "assets": [a.model_dump() for a in scene.assets],
             "word_triggers": [t.model_dump() for t in scene.word_triggers],
             "theme": cfg.theme.model_dump(),
             "orientation": cfg.project.resolved_orientation,

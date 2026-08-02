@@ -27,11 +27,13 @@ from typing import Any
 from . import annotate as annotate_mod
 from . import audio_track, evaluator, mux, segmenter
 from .align.native import NativeAligner
+from .assets import base as assets_base
 from .cache import (
     Cache,
     CacheReport,
     align_key,
     audio_key,
+    engine_fingerprint,
     render_key,
     sha256_obj,
     sha256_text,
@@ -75,6 +77,19 @@ def get_tts(cfg: Config):
     raise ValueError(
         f"Unknown TTS provider: {name!r} (available: cartesia, edge-tts, piper)"
     )
+
+
+def get_asset_provider(cfg: Config):
+    name = cfg.providers.assets
+    if name == "null":
+        from .assets.null import NullAssetProvider
+
+        return NullAssetProvider()
+    if name == "icon_pack":
+        from .assets.icon_pack import IconPackProvider
+
+        return IconPackProvider()
+    raise ValueError(f"Unknown asset provider: {name!r} (available: null, icon_pack)")
 
 
 def get_aligner(cfg: Config):
@@ -250,14 +265,48 @@ def build_spec_from_script(
     for warning in warnings:
         log(f"  annotation repair: {warning}")
 
-    spec = annotate_mod.build_spec(title or "Untitled", segments, annotations)
+    spec, cue_warnings = annotate_mod.build_spec(title or "Untitled", segments, annotations)
+    for warning in cue_warnings:
+        log(f"  cue repair: {warning}")
 
     # -- stage 3: symbolic evaluation (R4) ----------------------------------
-    resolutions = evaluator.resolve_scene_spec(spec)
-    computed = sum(1 for r in resolutions if r.computed)
-    log(f"resolved {len(resolutions)} on-screen values, {computed} computed from expressions")
+    resolutions, value_warnings = evaluator.resolve_scene_spec(spec)
+    for warning in value_warnings:
+        log(f"  value dropped: {warning}")
+    ok = [r for r in resolutions if not r.error]
+    computed = sum(1 for r in ok if r.computed)
+    log(f"resolved {len(ok)} on-screen values, {computed} computed from expressions")
     if args.explain_values:
         print("\n" + evaluator.render_resolutions(resolutions) + "\n")
+
+    # -- stage 3.5: visual assets (R7) --------------------------------------
+    #
+    # Runs here rather than in `run()` so that it applies to the script path only.
+    # A spec handed in with --spec is rendered exactly as written: R6's promise is
+    # that the artifact is the contract, and silently adding icons to a loaded spec
+    # would mean the video no longer matches the file that produced it. Delete an
+    # asset from a spec and re-render, and it stays deleted.
+    provider = get_asset_provider(cfg)
+    matched = 0
+    for scene in spec.scenes:
+        # Ranked against the whole script, not this segment: a word the script says
+        # once is what this scene is about, while a word it repeats throughout is
+        # background vocabulary. Same rarest-wins reasoning as cue repair.
+        keywords = assets_base.rank_by_rarity(
+            assets_base.keywords_of(scene.narration_text), script_text
+        )
+        scene.assets = provider.resolve(keywords)
+        if scene.assets:
+            matched += 1
+    if provider.name == "null":
+        log(f"assets: none ({provider.name} provider)")
+    else:
+        picked = ", ".join(
+            f"{s.scene_id}:{s.assets[0].id}" for s in spec.scenes if s.assets
+        )
+        log(f"assets: {provider.name} matched {matched}/{len(spec.scenes)} scenes")
+        if picked:
+            log(f"  {picked}")
 
     templates = ", ".join(f"{s.scene_id}:{s.template_name}" for s in spec.scenes)
     log(f"templates: {templates}")
@@ -280,7 +329,10 @@ def run(args: argparse.Namespace) -> int:
     use_cache = not args.no_cache
     report = CacheReport()
 
-    spec_cache = Cache(cache_root, "spec", enabled=use_cache)
+    # The spec tier is flagged non-deterministic: its content comes from an LLM, so
+    # --no-cache must not write through and clobber a good entry with a different
+    # one. See Cache.deterministic_content.
+    spec_cache = Cache(cache_root, "spec", enabled=use_cache, deterministic_content=False)
     audio_cache = Cache(cache_root, "audio", enabled=use_cache)
     align_cache = Cache(cache_root, "align", enabled=use_cache)
     scene_cache = Cache(cache_root, "scenes", enabled=use_cache)
@@ -295,7 +347,9 @@ def run(args: argparse.Namespace) -> int:
         # An edited spec may carry a new `expr`, so values are re-resolved. Edit
         # expr="2**8" to expr="2**10" and re-run: the number on screen changes
         # without the LLM being consulted. That is the R4 + R6 demo.
-        resolutions = evaluator.resolve_scene_spec(spec)
+        resolutions, value_warnings = evaluator.resolve_scene_spec(spec)
+        for warning in value_warnings:
+            log(f"  value dropped: {warning}")
         log(f"re-resolved {len(resolutions)} values from the edited spec")
         if args.explain_values:
             print("\n" + evaluator.render_resolutions(resolutions) + "\n")
@@ -335,6 +389,10 @@ def run(args: argparse.Namespace) -> int:
         return 0
 
     theme_sha = sha256_obj(cfg.theme.model_dump())
+    # Fingerprint the renderer sources so a template edit invalidates the render
+    # cache. Without this, changing a component serves last run's frames and the
+    # edit looks broken rather than cached (see cache.engine_fingerprint).
+    engine_sha = engine_fingerprint(ROOT / "remotion_engine")
     tts = get_tts(cfg)
     aligner = get_aligner(cfg)
     renderer = get_renderer(cfg, ROOT / "remotion_engine")
@@ -461,9 +519,11 @@ def run(args: argparse.Namespace) -> int:
         r_key = render_key(
             template_name=scene.template_name,
             props=scene.props,
+            assets=[a.model_dump() for a in scene.assets],
             word_triggers=[t.model_dump() for t in scene.word_triggers],
             duration_ms=frames * 1000 // cfg.project.fps,
             theme_sha256=theme_sha,
+            engine_sha256=engine_sha,
             fps=cfg.project.fps,
             width=cfg.project.width,
             height=cfg.project.height,
@@ -505,6 +565,7 @@ def run(args: argparse.Namespace) -> int:
         height=cfg.project.height,
         output_scale=cfg.project.output_scale,
         theme_sha256=theme_sha,
+        engine_sha256=engine_sha,
     )
     spec_path = out_path.with_suffix(".spec.json")
     spec_path.write_text(

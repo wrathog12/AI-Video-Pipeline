@@ -73,6 +73,11 @@ export const useMetrics = (theme: Theme, orientation: Orientation, outputScale =
 export const rootStyle = (theme: Theme): React.CSSProperties => ({
 	width: '100%',
 	height: '100%',
+	// Containing block for out-of-flow decoration (SceneIcon). Set here rather than
+	// per template so an icon is positioned against its own scene's frame; without
+	// it, absolute placement would resolve against Remotion's AbsoluteFill and a
+	// template with its own padding would put the glyph in the wrong place.
+	position: 'relative',
 	backgroundColor: theme.background_color,
 	color: theme.text_color,
 	fontFamily: `${theme.font_family}, system-ui, -apple-system, "Segoe UI", sans-serif`,
