@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+#
+# Usage:
+#   ./run --script scripts/script_a.txt --out output/script_a.mp4
+#   ./run --spec output/script_a.spec.json --out output/edited.mp4   # re-render only (R6)
+#   ./run --script … --profile portrait                              # 9:16 (R7)
+#   ./run --script … --explain-cache                                 # cache proof (R8)
+#
+set -euo pipefail          # pipefail matters: a failing stage in a pipe must not pass
+
+cd "$(dirname "$0")"
+
+# `python3` is frequently absent on Windows; fall back rather than fail.
+PY="${PYTHON:-}"
+if [ -z "$PY" ]; then
+  if command -v python3 >/dev/null 2>&1 && python3 -c '' >/dev/null 2>&1; then
+    PY=python3
+  else
+    PY=python
+  fi
+fi
+
+# Forward every argument through: argparse owns the CLI surface, including --help.
+exec "$PY" -m python_pipeline.main "$@"

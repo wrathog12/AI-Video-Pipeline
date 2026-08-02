@@ -1,0 +1,17 @@
+# Pinned for determinism (see context.md §7). Upgrade deliberately, never incidentally.
+
+# --- Phase 0: walking skeleton ---
+pydantic==2.12.3          # IR schema validation
+PyYAML==6.0.3             # config.yaml
+edge-tts==7.2.8           # TTSProvider: synthesis + native WordBoundary timings
+numpy==2.3.3              # PCM assembly in the sample domain
+soundfile==0.13.1         # WAV decode/encode (libsndfile)
+
+# --- Phase 2: LLM annotation ---
+anthropic>=0.75.0         # structured outputs via messages.parse()
+num2words==0.5.14         # numeral expansion for alignment normalisation
+
+# --- Phase 3: fallback aligner + QA gate ---
+# Installed on demand; both are heavy and neither is on the default path.
+#   pip install whisperx        (pulls torch, ~2.5GB)
+#   pip install pytesseract     (also needs the tesseract binary on PATH)

@@ -1,0 +1,64 @@
+schema_version: 2
+
+project:
+  fps: 30
+  # Canvas is authoritative. Aspect ratio is derived from it, not the reverse.
+  width: 1920
+  height: 1080
+  # Scale applied at render time. 0.4445 * 1920x1080 => 854x480 (480p, R4 legibility floor).
+  # Set to 1.0 for full-resolution delivery.
+  output_scale: 0.4445
+  # "landscape" | "portrait" | "auto" (derived from width/height)
+  orientation: auto
+
+# Selectable with `./run --profile portrait`. Proves aspect ratio is config, not code (R7).
+profiles:
+  portrait:
+    project:
+      width: 1080
+      height: 1920
+
+theme:
+  font_family: "Inter"
+  type_scale_base_vmin: 3.2   # type sizes are multiples of vmin, never hardcoded px
+  min_font_px: 22             # hard floor, enforced after output_scale
+  primary_color: "#E63946"
+  secondary_color: "#4EA8DE"
+  background_color: "#0D1117"
+  text_color: "#F8F9FA"
+  muted_color: "#8B949E"
+
+segmentation:
+  target_seconds: 12.0
+  min_seconds: 4.0
+  max_seconds: 20.0
+  words_per_minute: 165
+
+providers:
+  llm: "claude-opus-5"
+  tts: "edge-tts"       # edge-tts | piper | elevenlabs
+  aligner: "native"     # native | whisperx
+  assets: "null"        # null | icon_pack
+  renderer: "remotion"
+
+tts:
+  voice: "en-US-AriaNeural"
+  rate: "+0%"
+  # Canonical PCM format. All hashing happens on decoded samples in this format,
+  # never on container bytes (see context.md §6 Stage 5).
+  sample_rate: 24000
+  channels: 1
+
+audio:
+  # Silence padding inserted between scenes so boundaries land on frame edges.
+  scene_gap_ms: 250
+  lead_in_ms: 300
+  tail_ms: 500
+
+determinism:
+  require_cache: false
+  ban_wallclock: true
+
+qa:
+  ocr_gate: false           # enabled in Phase 3
+  ocr_min_confidence: 60

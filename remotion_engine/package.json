@@ -1,0 +1,22 @@
+{
+  "name": "remotion-engine",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Remotion renderer for the AI video engine. Renders VIDEO ONLY; audio is assembled and muxed by the Python pipeline.",
+  "scripts": {
+    "studio": "remotion studio src/Root.tsx",
+    "lint": "eslint src --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.410",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.410"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "eslint": "8.57.1",
+    "typescript": "5.9.3"
+  }
+}
