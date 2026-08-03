@@ -12,10 +12,30 @@ given, computes every on-screen number in Python, synthesises the voiceover,
 aligns the visuals to the spoken words, renders the scenes and muxes one MP4 —
 plus an `output/script_a.spec.json` you can open, edit, and re-render from.
 
+## Output
+
+![Two excerpts from a rendered video: three RGB sub-pixel panels revealing one at a time as each colour is named, then a large figure reading 16,777,216](docs/demo.gif)
+
+Two excerpts from a real run, unedited. **Left half:** the three sub-pixel panels
+reveal one at a time, each waiting for its own word in the narration — "Red" at
+10.35 s, "Green" at 11.08 s, "Blue" at 11.96 s into the scene. That is the word-level
+sync, and it comes from timings the synthesiser reported, not from a guess.
+**Right half:** `16,777,216` counts up to a figure the LLM never wrote — it proposed
+the expression `256**3` and Python evaluated it.
+
+Both are from `scripts/script_a.txt` via `providers.tts: cartesia`, at
+854×480 (`output_scale: 0.4445`). Every cue in that run matched exactly, worst
+error 14.3 ms against a 150 ms budget.
+
+<sub>The GIF is silent and colour-reduced. For the narrated video, render it yourself
+with the command above, or open `output/cart_a.mp4` — GitHub will not play a
+committed MP4 inline.</sub>
+
 ---
 
 ## Table of contents
 
+- [Output](#output)
 - [What this is](#what-this-is)
 - [The core idea: a compiler, not a prompt](#the-core-idea-a-compiler-not-a-prompt)
 - [Workflow](#workflow)
@@ -614,6 +634,10 @@ run, run.cmd                  entry points — thin wrappers; argparse owns the 
 config.yaml                   every knob, with the reasoning in comments
 requirements.txt              pinned; optional extras commented out
 .env.example                  template; .env is gitignored
+
+docs/
+  demo.gif                    the excerpt shown at the top of this file
+  poster.png                  a single frame, for embedding elsewhere
 
 scripts/
   script_a.txt                "How Computers See Color" (301 words)
