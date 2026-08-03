@@ -39,3 +39,10 @@ output/**
 .env
 .env.*
 !.env.example
+
+# Internal engineering report. Deliberately not published: it is a per-file,
+# per-component walkthrough written for the author's own reference, and it names
+# implementation detail (cache key composition, prompt structure, the exact
+# whitelist the dashboard can write) that belongs in a working directory rather
+# than on a public repo. README.md is the document that ships.
+TECHNICAL_REPORT.md
