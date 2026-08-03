@@ -40,10 +40,11 @@ providers:
   # so any gemini-* or claude-* model id works without a code change, and
   # "heuristic" runs the offline rule-based annotator with no key at all.
   llm: "gemini-2.5-flash"
-  # cartesia is the primary provider (quality + word timestamps).
+  # cartesia is the primary provider (quality + native word timestamps, verified
+  # against a live key: boundary text is the input token, so "256" cues "256").
   # edge-tts remains the fallback: free, no key, and it works offline of any
   # paid account — so a dead key at the live review still yields a video.
-  tts: "edge-tts"       # cartesia | edge-tts | piper
+  tts: "cartesia"       # cartesia | edge-tts | piper
   aligner: "native"     # native | whisperx
   # icon_pack matches narration keywords against the vendored Noto Emoji set
   # (Apache-2.0, baked to remotion_engine/public/icons by

@@ -114,7 +114,7 @@ def _tts_status(name: str) -> tuple[bool, str]:
         load_env()
         if not os.environ.get("CARTESIA_API_KEY"):
             return False, "CARTESIA_API_KEY not set"
-        return True, "key present — untested against a live key"
+        return True, "key present, native word timings"
     if name == "piper":
         return _module_importable(".tts.piper", "PiperTTS")
     return False, "unknown provider"

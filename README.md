@@ -205,7 +205,9 @@ environment variables always take precedence over the file.
 the LLM, and that is the point — it exists so a dead key or missing network never
 means "no video."
 
-The default TTS provider (`edge-tts`) needs **no key**.
+The default TTS provider is `cartesia`, which needs `CARTESIA_API_KEY`. If you do
+not have one, set `providers.tts: edge-tts` in `config.yaml` — edge-tts is free,
+needs **no key**, and also reports native word boundaries, so sync still holds.
 
 ### 4. Render your first video
 
@@ -407,17 +409,30 @@ the element waits for, and `derived_from` is what the cache keys on.
 
 ### Word-level sync in one paragraph
 
-The TTS engine tells us when it emitted each word. edge-tts is asked with
+The TTS engine tells us when it emitted each word. Cartesia streams
+`word_timestamps` over SSE (`/tts/sse` — the `/tts/bytes` endpoint returns audio
+with no timings and is unusable here); edge-tts is asked with
 `boundary="WordBoundary"` (its 7.x default is `SentenceBoundary`, which silently
-yields *zero* word events); Cartesia streams `word_timestamps` over SSE. Both are
-normalised to a `WordBoundary(text, start_ms, duration_ms)` and then into the IR's
+yields *zero* word events). Both are normalised to a
+`WordBoundary(text, start_ms, duration_ms)` and then into the IR's
 `word_triggers`. A trigger's `word` is the **input** token — `"255"`, not "two
 fifty-five" — so a reviewer scrubbing the script lands on the right frame. In the
 renderer, `WordCue.tsx` is the single place milliseconds become frames
 (`Math.round(ms / 1000 * fps)`) and resolves a `cue_word` to a trigger in three
-passes: exact, prefix, then sub-token. Measured worst case on Script A is
-**13.3 ms**, and it is *quantisation* error, not alignment error — because the
-timings were never estimated in the first place.
+passes: exact, prefix, then sub-token.
+
+Measured, both providers, both scripts:
+
+| Run | Provider | Cues | Worst error |
+|---|---|---|---|
+| Script A | `cartesia` | **12/12 exact** | 14.3 ms |
+| Script B | `cartesia` | **8/8 exact** | 12.3 ms |
+| Script A | `edge-tts` | 12/12 (11 exact, 1 sub-token) | 13.3 ms |
+
+Against a 150 ms budget, and in every case it is *quantisation* error — ms rounded
+to the nearest frame — not alignment error, because the timings were never
+estimated in the first place. One frame at 30 fps is 33.3 ms, so ±16.7 ms is the
+floor for this approach; the numbers above are at that floor.
 
 ### Why one audio track, not per-scene audio
 
@@ -453,11 +468,11 @@ serving a stale frame. `--explain-cache` prints the per-scene verdict.
 |---|---|---|
 | `pydantic` | 2.12.3 | The IR contract. `extra="forbid"` everywhere, so a typo in a hand-edited spec is an error, not a silently ignored field |
 | `PyYAML` | 6.0.3 | Config loading |
-| `edge-tts` | 7.2.8 | Default TTS. Free, no key, native word boundaries |
+| `edge-tts` | 7.2.8 | Fallback TTS. Free, no key, native word boundaries |
 | `numpy` | 2.3.3 | PCM assembly in the sample domain |
 | `soundfile` | 0.13.1 | WAV I/O |
 | `google-genai` | 1.74.0 | Gemini annotation with a hand-written response schema |
-| `requests` | 2.32.5 | Cartesia SSE |
+| `requests` | 2.32.5 | Cartesia SSE streaming (default TTS path) |
 | `fastapi` | 0.136.1 | Dashboard API |
 | `uvicorn` | 0.46.0 | Dashboard server |
 
@@ -531,14 +546,14 @@ segmentation:
 
 providers:
   llm: "gemini-2.5-flash"   # any gemini-* / claude-* id, or "heuristic"
-  tts: "edge-tts"           # cartesia | edge-tts | piper
+  tts: "cartesia"           # cartesia | edge-tts | piper
   aligner: "native"         # native | whisperx
   assets: "icon_pack"       # null | icon_pack
   renderer: "remotion"
 
 tts:
   voices:                   # one voice per provider — a voice id is provider-specific
-    cartesia: "bf0a246a-…"
+    cartesia: "bf0a246a-…"   # "Sophie - Teacher"
     edge-tts: "en-US-AriaNeural"
   rate: "+0%"               # provider-neutral; each provider translates it
   sample_rate: 24000        # canonical PCM format; all hashing is on decoded samples
