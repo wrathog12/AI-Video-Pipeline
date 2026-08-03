@@ -179,35 +179,53 @@ npm install
 cd ..
 ```
 
-### 3. Provide an API key
+### 3. Provide API keys
 
 ```bash
 cp .env.example .env
 ```
 
-Then open `.env` and set **one** key:
+Then open `.env` and fill in the two keys the default configuration uses:
 
 ```ini
-GEMINI_API_KEY=your-key-here     # https://aistudio.google.com/apikey
+# LLM annotation — https://aistudio.google.com/apikey
+GEMINI_API_KEY=your-key-here
+
+# TTS (default provider) — https://play.cartesia.ai/keys
+CARTESIA_API_KEY=your-key-here
 ```
 
 `.env` is gitignored. Keys are never logged: the loader returns key *names* only,
 and the redaction helper renders presence and shape, never a value. Real
 environment variables always take precedence over the file.
 
-**No key at all?** You still get a video:
+**Either key is optional — the pipeline degrades rather than fails.** Each has a
+keyless substitute that still produces a complete, synced video:
+
+| Missing | Substitute | How |
+|---|---|---|
+| `GEMINI_API_KEY` | `heuristic` annotator — rule-based, pure Python, offline | `--annotator heuristic`, or `providers.llm: heuristic` |
+| `CARTESIA_API_KEY` | `edge-tts` — free, no key, also reports native word boundaries | `providers.tts: edge-tts` in `config.yaml` |
+
+So with **no keys at all** you still get a video:
 
 ```bash
 ./run --script scripts/script_a.txt --out output/a.mp4 --annotator heuristic
 ```
 
-`heuristic` is a rule-based annotator in pure Python. It is less insightful than
-the LLM, and that is the point — it exists so a dead key or missing network never
-means "no video."
+…after setting `providers.tts: edge-tts`. The heuristic annotator is less insightful
+than the LLM, and that is the point — it exists so a dead key or missing network never
+means "no video." Sync is unaffected by either substitution: edge-tts reports word
+boundaries natively too, so the ±150 ms guarantee holds on the keyless path (measured
+13.3 ms — see [the sync table](#word-level-sync-in-one-paragraph)).
 
-The default TTS provider is `cartesia`, which needs `CARTESIA_API_KEY`. If you do
-not have one, set `providers.tts: edge-tts` in `config.yaml` — edge-tts is free,
-needs **no key**, and also reports native word boundaries, so sync still holds.
+Which providers are actually usable is **probed, not declared** — the dashboard's
+settings page greys out any option whose key or module is missing and tells you which,
+so you never select an option that would crash. Check from the CLI:
+
+```bash
+python -c "from python_pipeline.server import settings as s; print(s.provider_options()['tts'])"
+```
 
 ### 4. Render your first video
 
